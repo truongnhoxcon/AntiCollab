@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars (or an environment-specific .tfvars file
+# such as environments/dev.tfvars) and fill in the real values.
+# NEVER commit a .tfvars file that contains secrets to version control.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# General
+aws_region   = "us-east-1"
+environment  = "dev"            # dev | staging | prod
+project_name = "realtime-collab"
+account_id   = "123456789012"   # your 12-digit AWS account ID
+
+# Networking
+vpc_cidr = "10.1.0.0/16"       # dev: 10.1.0.0/16 | staging: 10.2.0.0/16 | prod: 10.0.0.0/16
+
+# Application images (ECR URIs)
+# Leave empty to allow Terraform to create the ECR repos first, then update.
+core_backend_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/core-backend:latest"
+realtime_backend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/realtime-backend:latest"
+
+# DNS / ACM
+domain_name = "dev.yourdomain.com"
+
+# Alerting
+alert_email = "devops@yourdomain.com"
