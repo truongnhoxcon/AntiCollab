@@ -1,0 +1,24 @@
+{
+  "name": "core-backend",
+  "version": "1.0.0",
+  "description": "Core Backend for Real-time Collaboration Platform",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0",
+    "redis": "^4.6.14",
+    "twilio": "^4.23.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
