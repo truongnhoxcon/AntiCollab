@@ -8,6 +8,10 @@ mini-discord-project/
 │   │   │   │   ├── chat/               # Khung chat, danh sách tin nhắn, dòng tin nhắn
 │   │   │   │   ├── video/              # Khung hiển thị Video Grid, nút tắt/bật Mic/Cam
 │   │   │   │   └── navigation/         # Thanh bên (Sidebar) danh sách Server, Channel
+│   │   │   ├── pages/                  # === THÊM THƯ MỤC NÀY (Chứa các trang lớn) ===
+│   │   │   │   ├── LandingPage.js      # -> ĐÂY LÀ FILE HOMEPAGE BẠN CẦN (Giống discord.com)
+│   │   │   │   ├── LoginPage.js        # -> Trang đăng nhập/đăng ký
+│   │   │   │   └── MainAppPage.js      # -> Giao diện không gian Chat & Video Call chính
 │   │   │   ├── hooks/                  # Các Custom Hooks xử lý logic kết nối
 │   │   │   │   ├── useWebSocket.js     # Logic kết nối, lắng nghe, gửi tin qua WebSocket
 │   │   │   │   └── useWebRTC.js        # Logic xin quyền Cam/Mic, bắt tay SDP với STUN/TURN
