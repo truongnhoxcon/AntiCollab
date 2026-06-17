@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+<<<<<<< HEAD
 import { useAuth } from '../context/AuthContext.js';
 import { useChat } from '../context/ChatContext.js';
+=======
+import logo2 from '../assets/AntiGR Logo 02.png';
+>>>>>>> 701ea8aa1c8327a6f1a96eb123d6131c7d8276b5
 import { 
   Hash, 
   Volume2, 
@@ -121,7 +125,7 @@ export default function MainAppPage() {
         <div className="relative group flex items-center justify-center w-full">
           <div className="absolute left-0 w-1 bg-white rounded-r-md transition-all duration-200 h-10 group-hover:h-10" />
           <button className="w-12 h-12 rounded-2xl bg-[#5865F2] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200">
-            <Sparkles className="w-6 h-6" />
+            <img src={logo2} alt="AntiGroup Home" className="w-10 h-10 object-contain" />
           </button>
           <div className="absolute left-20 bg-gray-950 text-gray-100 text-xs font-bold px-3 py-1.5 rounded shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 whitespace-nowrap">
             AntiGroup Home

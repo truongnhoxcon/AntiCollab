@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logo from '../assets/AntiGR Logo.png';
 import { 
   Menu, 
   X, 
@@ -29,7 +30,8 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center">
+          <div className="flex-shrink-0 flex items-center gap-3">
+            <img src={logo} alt="AntiGroup Logo" className="h-12 w-auto object-contain cursor-pointer hover:opacity-90 transition duration-150" />
             <span className="text-2xl font-black tracking-wider cursor-pointer hover:opacity-90 transition duration-150">
               AntiGroup
             </span>
@@ -343,9 +345,12 @@ const Footer = () => {
           
           {/* Brand Column */}
           <div className="col-span-2 lg:col-span-2 pr-0 lg:pr-8">
-            <span className="text-3xl font-black tracking-widest text-[#5865F2] block mb-4">
-              AntiGroup
-            </span>
+            <div className="flex items-center gap-3 mb-4">
+              <img src={logo} alt="AntiGroup Logo" className="h-14 w-auto object-contain" />
+              <span className="text-3xl font-black tracking-widest text-[#5865F2]">
+                AntiGroup
+              </span>
+            </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6 max-w-sm">
               Your web-based space to connect, share, and collaborate with groups, teams, and friends. No installs. Just links.
             </p>
@@ -408,7 +413,8 @@ const Footer = () => {
 
         {/* Bottom Banner */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="AntiGroup Logo" className="h-8 w-auto object-contain" />
             <span className="text-xl font-bold tracking-wide">
               AntiGroup
             </span>
