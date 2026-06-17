@@ -5,6 +5,9 @@ const channelController = require('../controllers/channel.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
 const tenantMiddleware = require('../middlewares/tenant.middleware');
 
+// Get all servers user is a member of (authentication required)
+router.get('/', authMiddleware, serverController.getUserServers);
+
 // Create a new server (authentication required)
 router.post('/', authMiddleware, serverController.createServer);
 

@@ -110,6 +110,23 @@ services:
     networks:
       - realtime-network
 
+  # ---------------------------------------------------------------------------
+  # Frontend Service (React + Nginx)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: realtime_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend-core
+      - backend-realtime
+    networks:
+      - realtime-network
+
 # -----------------------------------------------------------------------------
 # Networks and Persistent Volumes Definitions
 # -----------------------------------------------------------------------------

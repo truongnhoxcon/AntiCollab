@@ -97,7 +97,6 @@ export const ChatProvider = ({ children }) => {
 
   /**
    * Fetch all servers the authenticated user is a member of.
-   * Fallbacks to localStorage / mock list if API is missing (404).
    */
   const fetchServers = async () => {
     setLoading(true);
@@ -105,61 +104,24 @@ export const ChatProvider = ({ children }) => {
       const response = await api.get('/api/servers');
       setServers(response.data);
       if (response.data.length > 0) {
+        // Set default active server and channel if not set yet
         const defaultServer = response.data[0];
-        setActiveServerId(defaultServer.id);
-        const textChan = defaultServer.channels?.find((c) => c.type === 'text');
-        if (textChan) {
-          setActiveChannelId(textChan.id);
+        if (!activeServerIdRef.current) {
+          setActiveServerId(defaultServer.id);
+          const textChan = defaultServer.channels?.find((c) => c.type === 'text');
+          if (textChan) {
+            setActiveChannelId(textChan.id);
+          }
         }
+      } else {
+        setActiveServerId(null);
+        setActiveChannelId(null);
       }
     } catch (error) {
-      console.warn('[ChatContext] GET /api/servers failed or not implemented. Fallback to localStorage mock schema.', error.message);
-      
-      const stored = localStorage.getItem('local_servers');
-      let currentServers = [];
-      if (stored) {
-        currentServers = JSON.parse(stored);
-      } else {
-        // Initial setup for the mockup
-        currentServers = [
-          {
-            id: 'server-1',
-            name: 'AntiGroup HQ',
-            abbr: 'AG',
-            channels: [
-              { id: 'c-1', name: 'general', type: 'text' },
-              { id: 'c-2', name: 'development', type: 'text' },
-              { id: 'c-3', name: 'design-feedback', type: 'text' },
-              { id: 'c-4', name: 'Lounge', type: 'voice' },
-              { id: 'c-5', name: 'Gaming Zone', type: 'voice' }
-            ]
-          },
-          {
-            id: 'server-2',
-            name: 'Study Room',
-            abbr: 'SR',
-            channels: [
-              { id: 'c-6', name: 'announcements', type: 'text' },
-              { id: 'c-7', name: 'resources', type: 'text' },
-              { id: 'c-8', name: 'questions', type: 'text' },
-              { id: 'c-9', name: 'Silent Study', type: 'voice' }
-            ]
-          }
-        ];
-        localStorage.setItem('local_servers', JSON.stringify(currentServers));
-      }
-
-      setServers(currentServers);
-
-      // Set default active server and channel
-      if (currentServers.length > 0) {
-        const defaultServer = currentServers[0];
-        setActiveServerId(defaultServer.id);
-        const textChan = defaultServer.channels?.find((c) => c.type === 'text');
-        if (textChan) {
-          setActiveChannelId(textChan.id);
-        }
-      }
+      console.error('[ChatContext] Failed to fetch servers from API:', error.message);
+      setServers([]);
+      setActiveServerId(null);
+      setActiveChannelId(null);
     } finally {
       setLoading(false);
     }
@@ -172,11 +134,11 @@ export const ChatProvider = ({ children }) => {
   const fetchMessages = async (channelId) => {
     try {
       const response = await api.get(`/api/channels/${channelId}/messages`);
-      // Sort messages in ascending order for chat window rendering (backend returns order by created_at DESC)
+      // Sort messages in ascending order for chat window rendering
       const messageList = [...response.data.messages].reverse();
       setMessages(messageList);
       
-      // Update mock active users/members list based on senders in chat + self
+      // Update active users/members list based on actual senders in chat history + self
       const uniqueSenders = {};
       messageList.forEach((m) => {
         if (m.sender && m.sender.id) {
@@ -187,25 +149,19 @@ export const ChatProvider = ({ children }) => {
       const memberList = Object.keys(uniqueSenders).map((id) => ({
         id,
         username: uniqueSenders[id],
-        status: id === user?.id ? 'online' : 'offline',
+        status: id === user?.id ? 'online' : 'offline', // Default status logic
       }));
 
-      // Add self if not in list
+      // Add self to the member list if not already present
       if (user && !memberList.some((m) => m.id === user.id)) {
         memberList.push({ id: user.id, username: user.username, status: 'online' });
       }
 
       setMembers(memberList);
     } catch (error) {
-      console.error('[ChatContext] Failed to fetch channel messages:', error.message);
-      // Fallback for static mock demo
+      console.error('[ChatContext] Failed to fetch channel messages from API:', error.message);
       setMessages([]);
-      setMembers([
-        { id: user?.id || 'me', username: user?.username || 'You', status: 'online' },
-        { id: 'u-1', username: 'Alex', status: 'online' },
-        { id: 'u-2', username: 'Sophia', status: 'offline' },
-        { id: 'u-3', username: 'Ryan', status: 'online' }
-      ]);
+      setMembers(user ? [{ id: user.id, username: user.username, status: 'online' }] : []);
     }
   };
 
@@ -225,7 +181,7 @@ export const ChatProvider = ({ children }) => {
       content,
     });
 
-    // Optimistic local update for self (fallback render until WS broadcasts back)
+    // Optimistic local update for self (WS will broadcast back but this provides immediate UI responsiveness)
     const tempMessage = {
       id: `temp-${Date.now()}`,
       content,
@@ -255,11 +211,9 @@ export const ChatProvider = ({ children }) => {
         channels: [],
       };
 
-      const nextServers = [...servers, updatedServer];
-      setServers(nextServers);
-      localStorage.setItem('local_servers', JSON.stringify(nextServers));
-      
+      setServers((prev) => [...prev, updatedServer]);
       setActiveServerId(updatedServer.id);
+      setActiveChannelId(null);
       return { success: true, server: updatedServer };
     } catch (error) {
       console.error('[ChatContext] Server creation failed:', error.message);
@@ -277,18 +231,17 @@ export const ChatProvider = ({ children }) => {
       const response = await api.post(`/api/servers/${activeServerId}/channels`, { name, type });
       const createdChannel = response.data.channel;
 
-      const nextServers = servers.map((s) => {
-        if (s.id === activeServerId) {
-          return {
-            ...s,
-            channels: [...(s.channels || []), createdChannel],
-          };
-        }
-        return s;
-      });
-
-      setServers(nextServers);
-      localStorage.setItem('local_servers', JSON.stringify(nextServers));
+      setServers((prev) => 
+        prev.map((s) => {
+          if (s.id === activeServerId) {
+            return {
+              ...s,
+              channels: [...(s.channels || []), createdChannel],
+            };
+          }
+          return s;
+        })
+      );
       
       if (type === 'text') {
         setActiveChannelId(createdChannel.id);
@@ -330,3 +283,4 @@ export const useChat = () => {
   }
   return context;
 };
+

@@ -1,28 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-<<<<<<< HEAD
 import { useAuth } from '../context/AuthContext.js';
 import { useChat } from '../context/ChatContext.js';
-=======
 import logo2 from '../assets/AntiGR Logo 02.png';
->>>>>>> 701ea8aa1c8327a6f1a96eb123d6131c7d8276b5
-import { 
-  Hash, 
-  Volume2, 
-  Mic, 
-  MicOff, 
-  Headphones, 
-  Settings, 
-  Plus, 
-  Compass, 
-  ChevronDown, 
-  Search, 
-  Bell, 
-  Pin, 
-  Users, 
-  HelpCircle, 
-  Smile, 
-  Gift, 
-  FileCode, 
+import {
+  Hash,
+  Volume2,
+  Mic,
+  MicOff,
+  Headphones,
+  Settings,
+  Plus,
+  Compass,
+  ChevronDown,
+  Search,
+  Bell,
+  Pin,
+  Users,
+  HelpCircle,
+  Smile,
+  Gift,
+  FileCode,
   MessageSquare,
   Sparkles,
   LogOut,
@@ -63,7 +60,7 @@ export default function MainAppPage() {
   // Modals visibility and fields
   const [showServerModal, setShowServerModal] = useState(false);
   const [serverNameInput, setServerNameInput] = useState('');
-  
+
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [channelNameInput, setChannelNameInput] = useState('');
   const [channelTypeInput, setChannelTypeInput] = useState('text');
@@ -118,7 +115,7 @@ export default function MainAppPage() {
 
   return (
     <div className="h-screen w-screen flex bg-[#313338] text-gray-100 font-sans overflow-hidden select-none relative">
-      
+
       {/* 1. SERVER SIDEBAR */}
       <aside className="w-[72px] bg-[#1E1F22] flex flex-col items-center py-3 gap-2 flex-shrink-0">
         {/* AntiGroup Home / Logo */}
@@ -142,7 +139,7 @@ export default function MainAppPage() {
             return (
               <div key={server.id} className="relative group flex items-center justify-center w-full">
                 <div className={`absolute left-0 w-1 bg-white rounded-r-md transition-all duration-200 
-                  ${isActive ? 'h-10' : 'h-0 group-hover:h-5'}`} 
+                  ${isActive ? 'h-10' : 'h-0 group-hover:h-5'}`}
                 />
                 <button
                   onClick={() => {
@@ -155,8 +152,8 @@ export default function MainAppPage() {
                     }
                   }}
                   className={`w-12 h-12 flex items-center justify-center text-sm font-bold tracking-wide transition-all duration-200 
-                    ${isActive 
-                      ? 'rounded-2xl bg-[#5865F2] text-white' 
+                    ${isActive
+                      ? 'rounded-2xl bg-[#5865F2] text-white'
                       : 'rounded-[24px] bg-[#313338] text-gray-300 hover:rounded-2xl hover:bg-[#5865F2] hover:text-white'}`}
                 >
                   {server.abbr || server.name.substring(0, 2).toUpperCase()}
@@ -170,7 +167,7 @@ export default function MainAppPage() {
 
           {/* Add a Server Button */}
           <div className="relative group flex items-center justify-center w-full">
-            <button 
+            <button
               onClick={() => setShowServerModal(true)}
               className="w-12 h-12 rounded-[24px] bg-[#313338] text-emerald-500 hover:rounded-2xl hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-all duration-200"
             >
@@ -192,29 +189,29 @@ export default function MainAppPage() {
 
         {/* Channel Categories */}
         <div className="flex-1 overflow-y-auto pt-4 px-2 space-y-4">
-          
+
           {/* TEXT CHANNELS */}
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-gray-400 px-1 py-1 hover:text-gray-200 cursor-pointer">
-              <button 
-                onClick={() => setCollapseText(!collapseText)} 
+              <button
+                onClick={() => setCollapseText(!collapseText)}
                 className="flex items-center gap-1 uppercase tracking-wider text-left"
               >
                 <ChevronDown className={`w-3 h-3 transition-transform ${collapseText ? '-rotate-90' : ''}`} />
                 Text Channels
               </button>
               {activeServer && (
-                <Plus 
+                <Plus
                   onClick={(e) => {
                     e.stopPropagation();
                     setChannelTypeInput('text');
                     setShowChannelModal(true);
                   }}
-                  className="w-4 h-4 hover:text-white" 
+                  className="w-4 h-4 hover:text-white"
                 />
               )}
             </div>
-            
+
             {!collapseText && activeServer && (
               <div className="mt-1 space-y-[2px]">
                 {channels
@@ -226,8 +223,8 @@ export default function MainAppPage() {
                         key={c.id}
                         onClick={() => setActiveChannelId(c.id)}
                         className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded text-sm font-medium transition group
-                          ${isSelected 
-                            ? 'bg-[#3F4147] text-white' 
+                          ${isSelected
+                            ? 'bg-[#3F4147] text-white'
                             : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                       >
                         <Hash className="w-5 h-5 text-gray-400 flex-shrink-0" />
@@ -243,21 +240,21 @@ export default function MainAppPage() {
           {/* VOICE CHANNELS */}
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-gray-400 px-1 py-1 hover:text-gray-200 cursor-pointer">
-              <button 
-                onClick={() => setCollapseVoice(!collapseVoice)} 
+              <button
+                onClick={() => setCollapseVoice(!collapseVoice)}
                 className="flex items-center gap-1 uppercase tracking-wider text-left"
               >
                 <ChevronDown className={`w-3 h-3 transition-transform ${collapseVoice ? '-rotate-90' : ''}`} />
                 Voice Channels
               </button>
               {activeServer && (
-                <Plus 
+                <Plus
                   onClick={(e) => {
                     e.stopPropagation();
                     setChannelTypeInput('voice');
                     setShowChannelModal(true);
                   }}
-                  className="w-4 h-4 hover:text-white" 
+                  className="w-4 h-4 hover:text-white"
                 />
               )}
             </div>
@@ -273,8 +270,8 @@ export default function MainAppPage() {
                         key={c.id}
                         onClick={() => handleVoiceChannelClick(c.id)}
                         className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm font-medium transition group
-                          ${isConnected 
-                            ? 'bg-[#3F4147] text-emerald-400' 
+                          ${isConnected
+                            ? 'bg-[#3F4147] text-emerald-400'
                             : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                       >
                         <div className="flex items-center gap-1.5 truncate">
@@ -306,7 +303,7 @@ export default function MainAppPage() {
               <span className="text-gray-400 truncate">
                 {channels.find(c => c.id === connectedVoiceId)?.name} / {activeServer.name}
               </span>
-              <button 
+              <button
                 onClick={() => setConnectedVoiceId(null)}
                 className="text-gray-400 hover:text-red-500 hover:bg-gray-800 p-1 rounded transition"
               >
@@ -320,9 +317,9 @@ export default function MainAppPage() {
         <footer className="h-[52px] bg-[#232428] flex items-center justify-between px-2.5 flex-shrink-0">
           <div className="flex items-center gap-2 max-w-[120px] cursor-pointer p-1 rounded hover:bg-[#35373C] transition">
             <div className="relative">
-              <img 
-                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user?.username || 'You'}`} 
-                alt="Avatar" 
+              <img
+                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user?.username || 'You'}`}
+                alt="Avatar"
                 className="w-8 h-8 rounded-full bg-slate-800"
               />
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#232428]" />
@@ -335,15 +332,15 @@ export default function MainAppPage() {
 
           {/* Controls */}
           <div className="flex items-center text-gray-400 gap-0.5">
-            <button 
+            <button
               onClick={() => setIsMuted(!isMuted)}
               className={`p-1.5 rounded hover:bg-[#3F4147] hover:text-gray-200 transition ${isMuted ? 'text-red-500' : ''}`}
               title={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
-            
-            <button 
+
+            <button
               onClick={() => {
                 const nextDeafen = !isDeafened;
                 setIsDeafened(nextDeafen);
@@ -355,7 +352,7 @@ export default function MainAppPage() {
               <Headphones className="w-4 h-4" />
             </button>
 
-            <button 
+            <button
               onClick={logout}
               className="p-1.5 rounded hover:bg-[#3F4147] hover:text-red-500 hover:text-gray-200 transition"
               title="Log Out"
@@ -386,7 +383,7 @@ export default function MainAppPage() {
               <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
                 <Pin className="w-5 h-5" />
               </button>
-              <button 
+              <button
                 onClick={() => setShowMembersList(!showMembersList)}
                 className={`p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition ${showMembersList ? 'text-white bg-[#3F4147]' : ''}`}
               >
@@ -396,10 +393,10 @@ export default function MainAppPage() {
 
             {/* Mock Search Bar */}
             <div className="relative bg-[#1E1F22] rounded flex items-center px-2 py-1 gap-1 text-xs">
-              <input 
-                type="text" 
-                placeholder="Search" 
-                className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-36 focus:w-48 transition-all duration-150" 
+              <input
+                type="text"
+                placeholder="Search"
+                className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-36 focus:w-48 transition-all duration-150"
               />
               <Search className="w-4 h-4 text-gray-500" />
             </div>
@@ -427,9 +424,9 @@ export default function MainAppPage() {
           {/* Messages */}
           {messages.map((msg) => (
             <div key={msg.id} className="flex gap-4 group hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition duration-100">
-              <img 
-                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.sender?.username || 'You'}`} 
-                alt="Avatar" 
+              <img
+                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.sender?.username || 'You'}`}
+                alt="Avatar"
                 className="w-10 h-10 rounded-full bg-slate-800 flex-shrink-0"
               />
               <div className="flex flex-col min-w-0">
@@ -454,8 +451,8 @@ export default function MainAppPage() {
         {activeChannel && (
           <form onSubmit={handleSendMessage} className="px-4 pb-6 flex-shrink-0">
             <div className="bg-[#383A40] rounded-lg p-2.5 flex items-center gap-3">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="p-1 text-gray-400 hover:text-gray-200 bg-[#4E5058] rounded-full hover:bg-gray-600 transition flex items-center justify-center"
               >
                 <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
@@ -495,13 +492,13 @@ export default function MainAppPage() {
               return (
                 <div key={member.id} className="flex items-center gap-2.5 p-1.5 rounded hover:bg-[#35373C] cursor-pointer transition">
                   <div className="relative flex-shrink-0">
-                    <img 
-                      src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${member.username}`} 
-                      alt={member.username} 
+                    <img
+                      src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${member.username}`}
+                      alt={member.username}
                       className="w-8 h-8 rounded-full bg-slate-800"
                     />
                     <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#2B2D31] 
-                      ${isOnline ? 'bg-emerald-500' : 'bg-gray-500'}`} 
+                      ${isOnline ? 'bg-emerald-500' : 'bg-gray-500'}`}
                     />
                   </div>
                   <span className={`text-sm font-semibold truncate ${isOnline ? 'text-gray-100' : 'text-gray-400'}`}>
@@ -518,7 +515,7 @@ export default function MainAppPage() {
       {showServerModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#313338] rounded-md shadow-2xl p-6 relative border border-gray-800 animate-fade-in">
-            <button 
+            <button
               onClick={() => setShowServerModal(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-white"
             >
@@ -542,7 +539,7 @@ export default function MainAppPage() {
                   className="w-full bg-[#1E1F22] border border-gray-800 rounded p-3 text-sm text-gray-100 outline-none focus:border-[#5865F2]"
                 />
               </div>
-              <button 
+              <button
                 type="submit"
                 className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-3 px-4 rounded transition"
               >
@@ -557,7 +554,7 @@ export default function MainAppPage() {
       {showChannelModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-[#313338] rounded-md shadow-2xl p-6 relative border border-gray-800 animate-fade-in">
-            <button 
+            <button
               onClick={() => setShowChannelModal(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-white"
             >
@@ -594,7 +591,7 @@ export default function MainAppPage() {
                   <option value="voice">Voice Channel</option>
                 </select>
               </div>
-              <button 
+              <button
                 type="submit"
                 className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-3 px-4 rounded transition"
               >
