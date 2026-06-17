@@ -11,6 +11,9 @@ router.get('/', authMiddleware, serverController.getUserServers);
 // Create a new server (authentication required)
 router.post('/', authMiddleware, serverController.createServer);
 
+// Join an existing server (authentication required)
+router.post('/join', authMiddleware, serverController.joinServer);
+
 // Create a channel within a server (authentication + tenant check required)
 router.post('/:serverId/channels', authMiddleware, tenantMiddleware, channelController.createChannel);
 

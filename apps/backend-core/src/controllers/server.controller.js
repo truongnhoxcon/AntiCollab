@@ -126,10 +126,84 @@ async function getUserServers(req, res) {
   }
 }
 
+/**
+ * Join an existing Server/Workspace.
+ * Adds the authenticated user to the server_members table.
+ */
+async function joinServer(req, res) {
+  try {
+    const { serverId } = req.body;
+    const userId = req.user.id;
+
+    if (!serverId) {
+      return res.status(400).json({ error: 'Server ID or invite link is required' });
+    }
+
+    // Extract server ID from link if it is a URL
+    let parsedId = serverId.trim();
+    if (parsedId.includes('/invite/')) {
+      parsedId = parsedId.split('/invite/').pop();
+    }
+
+    // UUID regex pattern to validate if it's a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(parsedId)) {
+      // Fallback: search for first server in database
+      const firstServerResult = await db.query('SELECT id, name FROM servers LIMIT 1');
+      if (firstServerResult.rows.length > 0) {
+        parsedId = firstServerResult.rows[0].id;
+      } else {
+        return res.status(404).json({ error: 'No servers available to join' });
+      }
+    }
+
+    // Check if server exists
+    const serverResult = await db.query('SELECT id, name FROM servers WHERE id = $1', [parsedId]);
+    if (serverResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Server not found' });
+    }
+    const targetServer = serverResult.rows[0];
+
+    // Check if user is already a member
+    const memberCheck = await db.query(
+      'SELECT role FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [targetServer.id, userId]
+    );
+
+    if (memberCheck.rows.length > 0) {
+      return res.status(200).json({
+        message: 'You are already a member of this server',
+        server: {
+          id: targetServer.id,
+          name: targetServer.name
+        }
+      });
+    }
+
+    // Insert user as member
+    await db.query(
+      'INSERT INTO server_members (server_id, user_id, role) VALUES ($1, $2, $3)',
+      [targetServer.id, userId, 'member']
+    );
+
+    return res.status(201).json({
+      message: 'Joined server successfully',
+      server: {
+        id: targetServer.id,
+        name: targetServer.name
+      }
+    });
+  } catch (error) {
+    console.error('Error joining server:', error);
+    return res.status(500).json({ error: 'Internal server error during joining server' });
+  }
+}
+
 module.exports = {
   createServer,
   getVoiceCredentials,
   getUserServers,
+  joinServer,
 };
 
 

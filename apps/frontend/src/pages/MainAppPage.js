@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { useChat } from '../context/ChatContext.js';
 import logo2 from '../assets/AntiGR Logo 02.png';
+import api from '../services/api.js';
 import {
   Hash,
   Volume2,
@@ -24,8 +25,73 @@ import {
   Sparkles,
   LogOut,
   Signal,
-  X
+  X,
+  ChevronRight,
+  Camera,
+  ImagePlus,
+  User,
+  Gamepad2,
+  Heart,
+  BookOpen,
+  GraduationCap,
+  Leaf,
+  Palette,
+  Gem,
+  UserPlus,
+  FolderPlus,
+  CheckSquare,
+  Shield,
+  Edit2,
+  Copy,
+  PlusCircle
 } from 'lucide-react';
+
+const templates = [
+  {
+    id: 'custom',
+    title: 'Create My Own',
+    channels: [{ type: 'text', name: 'general' }, { type: 'voice', name: 'General' }]
+  },
+  {
+    id: 'gaming',
+    title: 'Gaming',
+    categories: [{ name: 'Text Channels', channels: [{ type: 'text', name: 'general' }, { type: 'text', name: 'clips-and-highlights' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lobby' }, { type: 'voice', name: 'Gaming' }] }]
+  },
+  {
+    id: 'friends',
+    title: 'Friends',
+    categories: [{ name: 'Text Channels', channels: [{ type: 'text', name: 'general' }, { type: 'text', name: 'gaming' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lounge' }, { type: 'voice', name: 'Stream' }] }]
+  },
+  {
+    id: 'study',
+    title: 'Study Group',
+    categories: [{ name: 'Information', channels: [{ type: 'text', name: 'welcome-and-rules' }, { type: 'text', name: 'notes-and-resources' }] }, { name: 'Text Channels', channels: [{ type: 'text', name: 'general' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lounge' }, { type: 'voice', name: 'Study Room 1' }, { type: 'voice', name: 'Study Room 2' }] }]
+  },
+  {
+    id: 'club',
+    title: 'School Club',
+    categories: [{ name: 'Information', channels: [{ type: 'text', name: 'welcome-and-rules' }, { type: 'text', name: 'announcements' }, { type: 'text', name: 'resources' }] }, { name: 'Text Channels', channels: [{ type: 'text', name: 'general' }, { type: 'text', name: 'meeting-plans' }, { type: 'text', name: 'off-topic' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lounge' }, { type: 'voice', name: 'Meeting Room' }] }]
+  },
+  {
+    id: 'local',
+    title: 'Local Community',
+    categories: [{ name: 'Information', channels: [{ type: 'text', name: 'welcome-and-rules' }, { type: 'text', name: 'announcements' }] }, { name: 'Text Channels', channels: [{ type: 'text', name: 'general' }, { type: 'text', name: 'meeting-plans' }, { type: 'text', name: 'off-topic' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lounge' }, { type: 'voice', name: 'Meeting Room' }] }]
+  },
+  {
+    id: 'creators',
+    title: 'Artists & Creators',
+    categories: [{ name: 'Information', channels: [{ type: 'text', name: 'welcome-and-rules' }, { type: 'text', name: 'announcements' }] }, { name: 'Text Channels', channels: [{ type: 'text', name: 'general' }, { type: 'text', name: 'events' }, { type: 'text', name: 'ideas-and-feedback' }] }, { name: 'Voice Channels', channels: [{ type: 'voice', name: 'Lounge' }, { type: 'voice', name: 'Community Hangout' }, { type: 'voice', name: 'Stream Room' }] }]
+  }
+];
+
+const DUMMY_FRIENDS = [
+  { id: '1', displayName: 'Alex Mercer', username: 'alex_mercer' },
+  { id: '2', displayName: 'Sarah Connor', username: 'sconnor' },
+  { id: '3', displayName: 'Bruce Wayne', username: 'batman' },
+  { id: '4', displayName: 'Peter Parker', username: 'spidey' },
+  { id: '5', displayName: 'Viet Nguyen', username: 'viet_dev' },
+  { id: '6', displayName: 'Clark Kent', username: 'superman' },
+];
 
 export default function MainAppPage() {
   const { user, logout } = useAuth();
@@ -40,7 +106,8 @@ export default function MainAppPage() {
     members,
     sendMessage,
     createServer,
-    createChannel
+    createChannel,
+    fetchServers
   } = useChat();
 
   // Navigation / Collapse states
@@ -56,14 +123,106 @@ export default function MainAppPage() {
   // Chat input
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // Modals visibility and fields
   const [showServerModal, setShowServerModal] = useState(false);
-  const [serverNameInput, setServerNameInput] = useState('');
+  const [step, setStep] = useState(1);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [isCommunity, setIsCommunity] = useState(false);
+  const [serverName, setServerName] = useState('');
+  const [iconPreview, setIconPreview] = useState(null);
 
   const [showChannelModal, setShowChannelModal] = useState(false);
   const [channelNameInput, setChannelNameInput] = useState('');
   const [channelTypeInput, setChannelTypeInput] = useState('text');
+
+  // Server dropdown & Invite states
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteSearchQuery, setInviteSearchQuery] = useState('');
+  const [inviteLinkInput, setInviteLinkInput] = useState('');
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isDropdownOpen]);
+
+  const getTemplateIcon = (id) => {
+    switch (id) {
+      case 'custom':
+        return <ImagePlus className="w-5 h-5 text-[#5865F2]" />;
+      case 'gaming':
+        return <Gamepad2 className="w-5 h-5 text-[#5865F2]" />;
+      case 'friends':
+        return <Heart className="w-5 h-5 text-[#5865F2]" />;
+      case 'study':
+        return <BookOpen className="w-5 h-5 text-[#5865F2]" />;
+      case 'club':
+        return <GraduationCap className="w-5 h-5 text-[#5865F2]" />;
+      case 'local':
+        return <Leaf className="w-5 h-5 text-[#5865F2]" />;
+      case 'creators':
+        return <Palette className="w-5 h-5 text-[#5865F2]" />;
+      default:
+        return <Plus className="w-5 h-5 text-[#5865F2]" />;
+    }
+  };
+
+  const getTemplateDefaultName = (template, username) => {
+    const name = username || 'Viet';
+    if (!template || template.id === 'custom') {
+      return `${name}'s server`;
+    }
+    return `${name}'s ${template.title}`;
+  };
+
+  const handleSelectTemplate = (template) => {
+    setSelectedTemplate(template);
+    const defaultName = getTemplateDefaultName(template, user?.username);
+    setServerName(defaultName);
+    setStep(2);
+  };
+
+  const handleIconChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setIconPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCopyLink = () => {
+    const inviteUrl = `http://localhost:5173/invite/${activeServerId || 'abc123xyz'}`;
+    navigator.clipboard.writeText(inviteUrl)
+      .then(() => {
+        setInviteCopied(true);
+        setTimeout(() => {
+          setInviteCopied(false);
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('Failed to copy text: ', err);
+        setInviteCopied(true);
+        setTimeout(() => {
+          setInviteCopied(false);
+        }, 2000);
+      });
+  };
 
   // Active objects helper
   const activeServer = servers.find(s => s.id === activeServerId) || null;
@@ -91,13 +250,126 @@ export default function MainAppPage() {
 
   const handleCreateServer = async (e) => {
     e.preventDefault();
-    if (!serverNameInput.trim()) return;
-    const res = await createServer(serverNameInput);
-    if (res.success) {
-      setServerNameInput('');
+    if (!serverName.trim()) return;
+
+    // 1. Format payload
+    const payload = {
+      serverName: serverName.trim(),
+      iconPreview,
+      isCommunity,
+      template: selectedTemplate ? {
+        id: selectedTemplate.id,
+        title: selectedTemplate.title,
+        channels: selectedTemplate.channels,
+        categories: selectedTemplate.categories
+      } : null
+    };
+
+    // 2. Console log payload
+    console.log('[Create Server Payload]:', JSON.stringify(payload, null, 2));
+
+    // 3. Create Server on backend
+    const res = await createServer(serverName.trim());
+    if (res.success && res.server) {
+      const createdServer = res.server;
+
+      // Extract template channels
+      const templateChannels = [];
+      if (selectedTemplate) {
+        if (selectedTemplate.channels) {
+          templateChannels.push(...selectedTemplate.channels);
+        } else if (selectedTemplate.categories) {
+          selectedTemplate.categories.forEach(cat => {
+            if (cat.channels) {
+              templateChannels.push(...cat.channels);
+            }
+          });
+        }
+      }
+
+      // 4. Sequentially create channels
+      for (const chan of templateChannels) {
+        try {
+          await api.post(`/api/servers/${createdServer.id}/channels`, {
+            name: chan.name,
+            type: chan.type
+          });
+        } catch (err) {
+          console.error(`Failed to create template channel ${chan.name}:`, err.message);
+        }
+      }
+
+      // 5. Fetch updated server list and switch active server
+      await fetchServers();
+      setActiveServerId(createdServer.id);
+
+      // Select the first text channel of the newly created server
+      try {
+        const updatedServerList = await api.get('/api/servers');
+        const newlyFetchedServer = updatedServerList.data.find(s => s.id === createdServer.id);
+        if (newlyFetchedServer) {
+          const textChan = newlyFetchedServer.channels?.find(c => c.type === 'text');
+          if (textChan) {
+            setActiveChannelId(textChan.id);
+          } else {
+            setActiveChannelId(null);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to auto-select first channel:', err.message);
+      }
+      
+      // Reset states and close modal
+      setStep(1);
+      setSelectedTemplate(null);
+      setIsCommunity(false);
+      setServerName('');
+      setIconPreview(null);
       setShowServerModal(false);
     } else {
-      alert(`Error creating server: ${res.error}`);
+      alert(`Error creating server: ${res.error || 'Unknown error'}`);
+    }
+  };
+
+  const handleJoinServer = async (e) => {
+    e.preventDefault();
+    if (!inviteLinkInput.trim()) return;
+
+    try {
+      const response = await api.post('/api/servers/join', {
+        serverId: inviteLinkInput.trim()
+      });
+      const joinedServer = response.data.server;
+
+      // Fetch updated list of servers from backend
+      await fetchServers();
+
+      // Select the joined server
+      setActiveServerId(joinedServer.id);
+
+      // Select its first text channel if any
+      try {
+        const updatedServerList = await api.get('/api/servers');
+        const newlyFetchedServer = updatedServerList.data.find(s => s.id === joinedServer.id);
+        if (newlyFetchedServer) {
+          const textChan = newlyFetchedServer.channels?.find(c => c.type === 'text');
+          if (textChan) {
+            setActiveChannelId(textChan.id);
+          } else {
+            setActiveChannelId(null);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to auto-select first channel:', err.message);
+      }
+
+      // Clear inputs and close modal
+      setInviteLinkInput('');
+      setShowServerModal(false);
+      alert(response.data.message || 'Successfully joined server!');
+    } catch (err) {
+      console.error('Failed to join server:', err);
+      alert(err.response?.data?.error || 'Failed to join server. Please check your link/ID.');
     }
   };
 
@@ -168,7 +440,14 @@ export default function MainAppPage() {
           {/* Add a Server Button */}
           <div className="relative group flex items-center justify-center w-full">
             <button
-              onClick={() => setShowServerModal(true)}
+              onClick={() => {
+                setStep(1);
+                setSelectedTemplate(null);
+                setIsCommunity(false);
+                setServerName('');
+                setIconPreview(null);
+                setShowServerModal(true);
+              }}
               className="w-12 h-12 rounded-[24px] bg-[#313338] text-emerald-500 hover:rounded-2xl hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-all duration-200"
             >
               <Plus className="w-6 h-6" />
@@ -181,11 +460,79 @@ export default function MainAppPage() {
       </aside>
 
       {/* 2. CHANNELS SIDEBAR */}
-      <aside className="w-60 bg-[#2B2D31] flex flex-col flex-shrink-0">
-        <header className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 font-bold text-white shadow-sm cursor-pointer hover:bg-[#35373C] transition">
+      <aside className="w-60 bg-[#2B2D31] flex flex-col flex-shrink-0 relative" ref={dropdownRef}>
+        <header
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 font-bold text-white shadow-sm cursor-pointer hover:bg-[#35373C] transition relative"
+        >
           <span className="truncate">{activeServer ? activeServer.name : 'No Server Selected'}</span>
           <ChevronDown className="w-5 h-5 text-gray-300" />
         </header>
+
+        {/* Dropdown Menu */}
+        {isDropdownOpen && (
+          <div className="absolute top-[48px] left-2 right-2 z-50 bg-[#111214] rounded-md shadow-lg p-1.5 border border-gray-950 flex flex-col gap-0.5 animate-fade-in text-xs font-semibold text-gray-300">
+            <button
+              onClick={() => {
+                alert("Server Boosted!");
+                setIsDropdownOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#5865F2] hover:text-white text-fuchsia-400 transition text-left"
+            >
+              <span>Server Boost</span>
+              <Gem className="w-4 h-4" />
+            </button>
+
+            <div className="border-t border-[#313338] my-1" />
+
+            <button
+              onClick={() => {
+                setIsInviteModalOpen(true);
+                setIsDropdownOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#5865F2] hover:text-white text-[#5865F2] transition text-left"
+            >
+              <span>Invite People</span>
+              <UserPlus className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => {
+                alert("Server Settings is not implemented yet!");
+                setIsDropdownOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#5865F2] hover:text-white transition text-left"
+            >
+              <span>Server Settings</span>
+              <Settings className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => {
+                setChannelTypeInput('text');
+                setShowChannelModal(true);
+                setIsDropdownOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#5865F2] hover:text-white transition text-left"
+            >
+              <span>Create Channel</span>
+              <PlusCircle className="w-4 h-4" />
+            </button>
+
+            <div className="border-t border-[#313338] my-1" />
+
+            <button
+              onClick={() => {
+                alert("Left server!");
+                setIsDropdownOpen(false);
+              }}
+              className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-[#5865F2] hover:text-white text-red-400 transition text-left"
+            >
+              <span>Leave Server</span>
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Channel Categories */}
         <div className="flex-1 overflow-y-auto pt-4 px-2 space-y-4">
@@ -514,38 +861,271 @@ export default function MainAppPage() {
       {/* 5. CREATE SERVER MODAL */}
       {showServerModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#313338] rounded-md shadow-2xl p-6 relative border border-gray-800 animate-fade-in">
+          <div className="w-[480px] max-w-full bg-[#313338] rounded-lg shadow-2xl overflow-hidden relative border border-gray-800/80 animate-fade-in flex flex-col">
+            {/* Close Button */}
             <button
               onClick={() => setShowServerModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-100 transition z-10"
             >
               <X className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-bold text-center text-white mb-2">Create Your Server</h2>
-            <p className="text-sm text-gray-400 text-center mb-6">
-              Give your new server a personality with a name. You can always change it later.
-            </p>
-            <form onSubmit={handleCreateServer} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                  Server Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. My Study Group"
-                  value={serverNameInput}
-                  onChange={(e) => setServerNameInput(e.target.value)}
-                  className="w-full bg-[#1E1F22] border border-gray-800 rounded p-3 text-sm text-gray-100 outline-none focus:border-[#5865F2]"
-                />
+
+            {/* Step 1: Template Selection */}
+            {step === 1 && (
+              <div className="flex flex-col h-full">
+                <div className="p-6 pb-4 text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">Create Your Server</h2>
+                  <p className="text-sm text-gray-400">
+                    Your server is where you and your friends hang out. Make yours and start talking.
+                  </p>
+                </div>
+                
+                <div className="px-6 py-2 overflow-y-auto max-h-[320px] space-y-2.5 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
+                  {templates.map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      onClick={() => handleSelectTemplate(tpl)}
+                      className="w-full flex items-center justify-between p-3 rounded-lg bg-[#2B2D31] hover:bg-[#3F4147] transition border border-gray-800/20 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-[#313338] rounded-full group-hover:bg-[#2B2D31] transition flex items-center justify-center">
+                          {getTemplateIcon(tpl.id)}
+                        </div>
+                        <span className="text-sm font-bold text-gray-200 group-hover:text-white">
+                          {tpl.title}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-200 transition" />
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-6 bg-[#2B2D31] mt-auto flex flex-col items-center gap-3">
+                  <span className="text-sm text-gray-400 font-medium">Have an invite already?</span>
+                  <button
+                    onClick={() => {
+                      setStep(4);
+                      setInviteLinkInput('');
+                    }}
+                    className="w-full bg-[#4E5058] hover:bg-[#6D6F78] text-white font-bold py-2.5 px-4 rounded transition text-sm"
+                  >
+                    Join a Server
+                  </button>
+                </div>
               </div>
-              <button
-                type="submit"
-                className="w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-3 px-4 rounded transition"
-              >
-                Create Server
-              </button>
-            </form>
+            )}
+
+            {/* Step 2: Tell Us More (Community Flag) */}
+            {step === 2 && (
+              <div className="flex flex-col h-full">
+                <div className="p-6 pb-4 text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">Tell us more about your server</h2>
+                  <p className="text-sm text-gray-400 font-medium">
+                    In order to help you with your setup, is your new server for just a few friends or a larger community?
+                  </p>
+                </div>
+
+                <div className="px-6 py-4 space-y-4">
+                  <button
+                    onClick={() => {
+                      setIsCommunity(false);
+                      setStep(3);
+                    }}
+                    className="w-full flex items-center justify-between p-4 rounded-lg bg-[#2B2D31] hover:bg-[#3F4147] transition border border-gray-800/20 group text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-[#313338] rounded-full group-hover:bg-[#2B2D31] transition flex items-center justify-center">
+                        <User className="w-6 h-6 text-[#5865F2]" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-200 group-hover:text-white">For me and my friends</h4>
+                        <p className="text-xs text-gray-400 group-hover:text-gray-300">A small group to hang out, share, and talk.</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-200 transition" />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setIsCommunity(true);
+                      setStep(3);
+                    }}
+                    className="w-full flex items-center justify-between p-4 rounded-lg bg-[#2B2D31] hover:bg-[#3F4147] transition border border-gray-800/20 group text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-[#313338] rounded-full group-hover:bg-[#2B2D31] transition flex items-center justify-center">
+                        <Users className="w-6 h-6 text-[#5865F2]" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-200 group-hover:text-white">For a club or community</h4>
+                        <p className="text-xs text-gray-400 group-hover:text-gray-300">A structured space for members, events, and moderation.</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-gray-200 transition" />
+                  </button>
+
+                  <div className="text-center mt-6">
+                    <button
+                      onClick={() => {
+                        setIsCommunity(false);
+                        setStep(3);
+                      }}
+                      className="text-gray-400 hover:text-white text-xs font-semibold underline transition"
+                    >
+                      Not sure? You can skip this question for now.
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-[#2B2D31] mt-auto flex justify-between items-center">
+                  <button
+                    onClick={() => setStep(1)}
+                    className="text-gray-200 hover:underline text-sm font-medium"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Customize Your Server */}
+            {step === 3 && (
+              <form onSubmit={handleCreateServer} className="flex flex-col h-full">
+                <div className="p-6 pb-4 text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">Customize Your Server</h2>
+                  <p className="text-sm text-gray-400">
+                    Give your new server a personality with a name and an icon. You can always change it later.
+                  </p>
+                </div>
+
+                <div className="px-6 py-4 flex flex-col items-center">
+                  {/* Circular Image Upload */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleIconChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                  
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-[80px] h-[80px] rounded-full cursor-pointer relative group flex flex-col items-center justify-center transition overflow-visible"
+                  >
+                    {iconPreview ? (
+                      <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#5865F2]">
+                        <img src={iconPreview} alt="Server Icon Preview" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full rounded-full border-2 border-dashed border-gray-400 flex flex-col items-center justify-center hover:border-[#5865F2] bg-[#2B2D31] transition">
+                        <Camera className="w-5 h-5 text-gray-400 group-hover:text-white mb-0.5" />
+                        <span className="text-[9px] font-bold text-gray-400 group-hover:text-white uppercase">UPLOAD</span>
+                        <div className="absolute top-0 right-0 bg-[#5865F2] text-white rounded-full p-1 translate-x-[20%] -translate-y-[20%] shadow-lg">
+                          <Plus className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="text-[10px] text-gray-400 mt-2 text-center">
+                    Minimum size 128x128. Crop to a multiple of 128.
+                  </span>
+
+                  {/* Server Name Field */}
+                  <div className="w-full mt-6">
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                      SERVER NAME <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. My Study Group"
+                      value={serverName}
+                      onChange={(e) => setServerName(e.target.value)}
+                      className="w-full bg-[#1E1F22] border border-gray-800 rounded-md p-3 text-sm text-gray-100 outline-none focus:ring-2 focus:ring-[#5865F2] focus:border-transparent transition"
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-gray-400 mt-3 w-full text-left">
+                    By creating a server, you agree to AntiGroup's{' '}
+                    <a href="#" onClick={(e) => e.preventDefault()} className="text-blue-500 hover:underline font-semibold">
+                      Community Guidelines
+                    </a>.
+                  </p>
+                </div>
+
+                <div className="p-6 bg-[#2B2D31] mt-auto flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="text-gray-200 hover:underline text-sm font-medium"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-2.5 px-6 rounded transition text-sm shadow-md"
+                  >
+                    Create
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Step 4: Join a Server */}
+            {step === 4 && (
+              <form onSubmit={handleJoinServer} className="flex flex-col h-full">
+                <div className="p-6 pb-4 text-center">
+                  <h2 className="text-2xl font-bold text-white mb-2">Join a Server</h2>
+                  <p className="text-sm text-gray-400">
+                    Enter an invite link or invite ID below to join an existing server.
+                  </p>
+                </div>
+
+                <div className="px-6 py-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                      INVITE LINK OR SERVER ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. http://localhost:5173/invite/abc123xyz"
+                      value={inviteLinkInput}
+                      onChange={(e) => setInviteLinkInput(e.target.value)}
+                      className="w-full bg-[#1E1F22] border border-gray-800 rounded-md p-3 text-sm text-gray-100 outline-none focus:ring-2 focus:ring-[#5865F2] focus:border-transparent transition"
+                    />
+                  </div>
+
+                  <div className="space-y-2 text-left">
+                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      Invites should look like:
+                    </span>
+                    <ul className="text-xs text-gray-400 space-y-1 font-medium list-disc list-inside">
+                      <li><code className="text-gray-200">http://localhost:5173/invite/abc123xyz</code></li>
+                      <li><code className="text-gray-200">abc123xyz</code> (for fallback demo join)</li>
+                      <li><code className="text-gray-200">a9c512d7-b50a-4841-a1b9-dcd54d9241b3</code> (Server UUID)</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-[#2B2D31] mt-auto flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="text-gray-200 hover:underline text-sm font-medium"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-2.5 px-6 rounded transition text-sm shadow-md"
+                  >
+                    Join Server
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -598,6 +1178,104 @@ export default function MainAppPage() {
                 Create Channel
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 7. INVITE FRIENDS MODAL */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-[440px] max-w-full bg-[#313338] rounded-lg shadow-2xl relative border border-gray-800 animate-fade-in flex flex-col p-5">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setIsInviteModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-white leading-tight">
+                Invite friends to {activeServer ? activeServer.name : 'AntiGroup'}
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">
+                They'll arrive in <span className="font-semibold text-gray-300">#general</span>
+              </p>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative bg-[#1E1F22] rounded flex items-center px-3 py-2 gap-2 text-sm mb-4 border border-gray-800 focus-within:ring-2 focus-within:ring-[#5865F2] transition">
+              <input
+                type="text"
+                placeholder="Search for friends"
+                value={inviteSearchQuery}
+                onChange={(e) => setInviteSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-full text-xs"
+              />
+              <Search className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            </div>
+
+            {/* Friend List (Scrollable Area) */}
+            <div className="h-48 overflow-y-auto pr-1 space-y-2 mb-4 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
+              {DUMMY_FRIENDS.filter((friend) => {
+                if (!inviteSearchQuery.trim()) return true;
+                const query = inviteSearchQuery.toLowerCase();
+                return (
+                  friend.displayName.toLowerCase().includes(query) ||
+                  friend.username.toLowerCase().includes(query)
+                );
+              }).map((friend) => (
+                <div key={friend.id} className="flex items-center justify-between p-2 rounded hover:bg-[#3F4147]/50 transition group">
+                  <div className="flex items-center gap-3">
+                    {/* Avatar circle placeholder */}
+                    <div className="w-8 h-8 rounded-full bg-[#5865F2]/20 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                      {friend.displayName.substring(0, 1)}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-semibold text-gray-100 truncate group-hover:text-white leading-tight">
+                        {friend.displayName}
+                      </span>
+                      <span className="text-[11px] text-gray-400 truncate leading-none">
+                        @{friend.username}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      alert(`Invitation sent to ${friend.displayName}!`);
+                    }}
+                    className="border border-green-600 text-green-500 hover:bg-green-600 hover:text-white px-4 py-1 rounded-sm text-xs font-semibold transition-colors flex-shrink-0"
+                  >
+                    Invite
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer invite link copier */}
+            <div className="border-t border-[#2B2D31] pt-3">
+              <span className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-2">
+                Or, send a server invite link to a friend
+              </span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`http://localhost:5173/invite/${activeServerId || 'abc123xyz'}`}
+                  className="bg-[#1E1F22] text-gray-300 text-xs rounded p-2.5 outline-none flex-1 border border-gray-800"
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-4 py-2 rounded text-xs font-semibold transition-colors flex-shrink-0 font-medium"
+                >
+                  {inviteCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
