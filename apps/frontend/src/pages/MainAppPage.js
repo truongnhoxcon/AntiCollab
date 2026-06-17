@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import logo2 from '../assets/AntiGR Logo 02.png';
 import { 
   Hash, 
   Volume2, 
@@ -163,7 +164,7 @@ export default function MainAppPage() {
           <div className="absolute left-0 w-1 bg-white rounded-r-md transition-all duration-200 h-10 group-hover:h-10" />
           
           <button className="w-12 h-12 rounded-2xl bg-[#5865F2] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200">
-            <Sparkles className="w-6 h-6" />
+            <img src={logo2} alt="AntiGroup Home" className="w-10 h-10 object-contain" />
           </button>
           
           {/* Tooltip */}
