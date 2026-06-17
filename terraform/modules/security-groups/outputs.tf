@@ -4,6 +4,11 @@
 # RDS, ElastiCache) and the root configuration.
 # ─────────────────────────────────────────────────────────────────────────────
 
+output "frontend_sg_id" {
+  description = "ID of the Frontend ECS task security group (Nginx, port 80). Passed to the ECS frontend service network configuration."
+  value       = aws_security_group.frontend_sg.id
+}
+
 output "alb_sg_id" {
   description = "ID of the ALB security group. Used by the ALB module and referenced as the inbound source by backend security groups."
   value       = aws_security_group.alb_sg.id

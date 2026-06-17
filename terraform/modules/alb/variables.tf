@@ -14,12 +14,7 @@ variable "public_subnet_ids" {
 
 variable "alb_sg_id" {
   type        = string
-  description = "ID of the security group attached to the ALB (allows inbound 80/443)."
-}
-
-variable "domain_name" {
-  type        = string
-  description = "Domain name for the ACM certificate (e.g. app.example.com)."
+  description = "ID of the security group attached to the ALB (allows inbound port 80)."
 }
 
 variable "alb_logs_bucket" {

@@ -55,7 +55,8 @@ module "security_groups" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# S3 – needs account_id, domain_name
+# S3 – needs account_id
+# app_domain uses "*" in demo mode (no custom domain / HTTPS)
 # ─────────────────────────────────────────────────────────────────────────────
 
 module "s3" {
@@ -64,7 +65,7 @@ module "s3" {
   environment  = var.environment
   aws_region   = var.aws_region
   account_id   = var.account_id
-  app_domain   = "https://${var.domain_name}"
+  app_domain   = "*"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -127,8 +128,8 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   alb_sg_id         = module.security_groups.alb_sg_id
-  domain_name       = var.domain_name
   alb_logs_bucket   = module.s3.alb_logs_bucket_id
+  # domain_name and ACM certificate removed — demo mode uses plain HTTP on port 80
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ module "ecs" {
   ecs_task_role_arn           = module.iam.ecs_task_role_arn
 
   # Container images
+  frontend_image         = var.frontend_image
   core_backend_image     = var.core_backend_image
   realtime_backend_image = var.realtime_backend_image
 
@@ -161,10 +163,12 @@ module "ecs" {
 
   # Networking
   private_subnet_ids     = module.vpc.private_subnet_ids
+  frontend_sg_id         = module.security_groups.frontend_sg_id
   core_backend_sg_id     = module.security_groups.core_backend_sg_id
   realtime_backend_sg_id = module.security_groups.realtime_backend_sg_id
 
   # ALB integration
+  frontend_tg_arn         = module.alb.frontend_tg_arn
   core_backend_tg_arn     = module.alb.core_backend_tg_arn
   realtime_backend_tg_arn = module.alb.realtime_backend_tg_arn
   alb_https_listener_arn  = module.alb.https_listener_arn

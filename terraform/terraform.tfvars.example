@@ -1,27 +1,37 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # terraform.tfvars.example
 #
-# Copy this file to terraform.tfvars (or an environment-specific .tfvars file
-# such as environments/dev.tfvars) and fill in the real values.
-# NEVER commit a .tfvars file that contains secrets to version control.
+# Hướng dẫn:
+#   1. Copy file này: cp terraform.tfvars.example terraform.tfvars
+#   2. Điền các giá trị thực (đánh dấu ← THAY ĐỔI)
+#   3. KHÔNG commit terraform.tfvars lên Git (đã có trong .gitignore)
+#
+# Demo mode (HTTP):
+#   - Không cần domain riêng, không cần ACM certificate.
+#   - Truy cập trực tiếp qua ALB DNS name (http://...) sau terraform apply.
+#
+# Thứ tự thực hiện:
+#   Bước 1: Chạy deploy-ecr.sh     → lấy ECR Image URIs
+#   Bước 2: Điền core_backend_image và realtime_backend_image bên dưới
+#   Bước 3: Chạy deploy-infrastructure.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
-# General
+# ── Thông tin chung ──────────────────────────────────────────────────────────
 aws_region   = "us-east-1"
-environment  = "dev"            # dev | staging | prod
+environment  = "dev"                 # dev | staging | prod
 project_name = "realtime-collab"
-account_id   = "123456789012"   # your 12-digit AWS account ID
+account_id   = "123456789012"        # ← THAY: 12 chữ số AWS Account ID của bạn
+                                     #   Lấy bằng: aws sts get-caller-identity --query Account
 
-# Networking
-vpc_cidr = "10.1.0.0/16"       # dev: 10.1.0.0/16 | staging: 10.2.0.0/16 | prod: 10.0.0.0/16
+# ── Mạng ─────────────────────────────────────────────────────────────────────
+vpc_cidr = "10.1.0.0/16"             # dev: 10.1 | staging: 10.2 | prod: 10.0
 
-# Application images (ECR URIs)
-# Leave empty to allow Terraform to create the ECR repos first, then update.
-core_backend_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/core-backend:latest"
-realtime_backend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/realtime-backend:latest"
+# ── ECR Image URIs ────────────────────────────────────────────────────────────
+# Điền sau khi chạy deploy-ecr.sh — script sẽ in ra giá trị chính xác.
+frontend_image         = "123456789012.dkr.ecr.us-east-1.amazonaws.com/antigroup-frontend:latest"
+core_backend_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/antigroup-core:latest"
+realtime_backend_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/antigroup-realtime:latest"
+# ← THAY: Thay 123456789012 bằng account_id thực của bạn
 
-# DNS / ACM
-domain_name = "dev.yourdomain.com"
-
-# Alerting
-alert_email = "devops@yourdomain.com"
+# ── Cảnh báo qua Email ───────────────────────────────────────────────────────
+alert_email = "devops@yourdomain.com"  # ← THAY

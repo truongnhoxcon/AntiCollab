@@ -1,12 +1,12 @@
-terraform {
-  backend "s3" {
-    bucket         = "realtime-collab-terraform-state"
-    key            = "environments/default/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "realtime-collab-terraform-locks"
-  }
-}
+# terraform {
+#   backend "s3" {
+#     bucket         = "realtime-collab-terraform-state"
+#     key            = "environments/default/terraform.tfstate"
+#     region         = "us-east-1"
+#     encrypt        = true
+#     dynamodb_table = "realtime-collab-terraform-locks"
+#   }
+# }
 
 # NOTE: The S3 bucket and DynamoDB table for remote state must be created
 # manually (or via a bootstrap script) before running `terraform init`.

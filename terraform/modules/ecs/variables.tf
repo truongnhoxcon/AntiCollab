@@ -71,6 +71,24 @@ variable "twilio_secret_arn" {
   type        = string
 }
 
+# ─── Frontend additions ───────────────────────────────────────────────────────
+
+variable "frontend_image" {
+  description = "Docker image URI for the frontend container (Nginx SPA, port 80)."
+  type        = string
+  default     = "PLACEHOLDER/frontend:latest"
+}
+
+variable "frontend_sg_id" {
+  description = "Security group ID for frontend ECS tasks."
+  type        = string
+}
+
+variable "frontend_tg_arn" {
+  description = "ARN of the ALB target group for the frontend (port 80)."
+  type        = string
+}
+
 # ─── Task 11.2 additions ──────────────────────────────────────────────────────
 
 variable "private_subnet_ids" {

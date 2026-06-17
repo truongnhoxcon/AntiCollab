@@ -4,8 +4,18 @@
 
 # ALB
 output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer."
+  description = "Plain HTTP URL of the Application Load Balancer (demo mode)."
   value       = module.alb.alb_dns_name
+}
+
+output "alb_api_url" {
+  description = "Base URL for REST API calls from the frontend."
+  value       = "${module.alb.alb_dns_name}/api"
+}
+
+output "alb_ws_url" {
+  description = "WebSocket endpoint URL for the frontend."
+  value       = "ws://${module.alb.alb_raw_dns}/ws"
 }
 
 # ECS

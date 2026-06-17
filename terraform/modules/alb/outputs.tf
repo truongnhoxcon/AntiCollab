@@ -8,13 +8,23 @@ output "alb_arn" {
 }
 
 output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer (use for Route 53 alias records)."
+  description = "Plain HTTP URL of the Application Load Balancer (demo mode, no custom domain required)."
+  value       = "http://${aws_lb.this.dns_name}"
+}
+
+output "alb_raw_dns" {
+  description = "Raw DNS name of the ALB (without protocol prefix)."
   value       = aws_lb.this.dns_name
 }
 
 output "alb_zone_id" {
   description = "Canonical hosted zone ID of the ALB (required for Route 53 alias records)."
   value       = aws_lb.this.zone_id
+}
+
+output "frontend_tg_arn" {
+  description = "ARN of the frontend target group (port 80, Nginx SPA)."
+  value       = aws_lb_target_group.frontend.arn
 }
 
 output "core_backend_tg_arn" {
@@ -28,16 +38,11 @@ output "realtime_backend_tg_arn" {
 }
 
 output "https_listener_arn" {
-  description = "ARN of the HTTPS (port 443) listener."
-  value       = aws_lb_listener.https.arn
-}
-
-output "http_listener_arn" {
-  description = "ARN of the HTTP (port 80) listener (redirects to HTTPS)."
+  description = "Placeholder: HTTPS listener removed in demo mode. Returns HTTP listener ARN instead."
   value       = aws_lb_listener.http.arn
 }
 
-output "acm_certificate_arn" {
-  description = "ARN of the ACM certificate used for TLS termination on the ALB."
-  value       = aws_acm_certificate.alb.arn
+output "http_listener_arn" {
+  description = "ARN of the HTTP (port 80) listener."
+  value       = aws_lb_listener.http.arn
 }

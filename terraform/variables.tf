@@ -43,6 +43,12 @@ variable "vpc_cidr" {
 # Application images (ECR URIs)
 # ─────────────────────────────────────────────────────────────────────────────
 
+variable "frontend_image" {
+  description = "Full ECR image URI for the frontend service (Nginx SPA), e.g. <account>.dkr.ecr.<region>.amazonaws.com/antigroup-frontend:<tag>."
+  type        = string
+  default     = ""
+}
+
 variable "core_backend_image" {
   description = "Full ECR image URI for the core-backend service, e.g. <account>.dkr.ecr.<region>.amazonaws.com/core-backend:<tag>."
   type        = string
@@ -53,15 +59,6 @@ variable "realtime_backend_image" {
   description = "Full ECR image URI for the realtime-backend service, e.g. <account>.dkr.ecr.<region>.amazonaws.com/realtime-backend:<tag>."
   type        = string
   default     = ""
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DNS / ACM
-# ─────────────────────────────────────────────────────────────────────────────
-
-variable "domain_name" {
-  description = "Fully-qualified domain name for the ALB HTTPS listener certificate, e.g. app.yourdomain.com."
-  type        = string
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
