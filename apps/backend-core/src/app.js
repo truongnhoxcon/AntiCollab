@@ -6,6 +6,7 @@ const authRoutes = require('./routes/auth.routes');
 const serverRoutes = require('./routes/server.routes');
 const channelRoutes = require('./routes/channel.routes');
 const fileRoutes = require('./routes/file.routes');
+const userRoutes = require('./routes/user.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +52,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/servers', serverRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/users', userRoutes);
 
 // Catch-all 404 handler
 app.use((req, res) => {

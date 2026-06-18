@@ -10,22 +10,36 @@ export const ChatProvider = ({ children }) => {
   const socket = useWebSocket(token);
 
   const [servers, setServers] = useState([]);
-  const [activeServerId, setActiveServerId] = useState(null);
-  const [activeChannelId, setActiveChannelId] = useState(null);
+  const [activeServerId, setActiveServerId] = useState(() => {
+    return localStorage.getItem('activeServerId') || null;
+  });
+  const [activeChannelId, setActiveChannelId] = useState(() => {
+    return localStorage.getItem('activeChannelId') || null;
+  });
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Keep ref of active ids to use inside socket event listeners
-  const activeChannelIdRef = useRef(null);
-  const activeServerIdRef = useRef(null);
+  const activeChannelIdRef = useRef(localStorage.getItem('activeChannelId') || null);
+  const activeServerIdRef = useRef(localStorage.getItem('activeServerId') || null);
 
   useEffect(() => {
     activeChannelIdRef.current = activeChannelId;
+    if (activeChannelId) {
+      localStorage.setItem('activeChannelId', activeChannelId);
+    } else {
+      localStorage.removeItem('activeChannelId');
+    }
   }, [activeChannelId]);
 
   useEffect(() => {
     activeServerIdRef.current = activeServerId;
+    if (activeServerId) {
+      localStorage.setItem('activeServerId', activeServerId);
+    } else {
+      localStorage.removeItem('activeServerId');
+    }
   }, [activeServerId]);
 
   // Fetch servers on authentication
@@ -33,11 +47,16 @@ export const ChatProvider = ({ children }) => {
     if (token) {
       fetchServers();
     } else {
-      setServers([]);
-      setActiveServerId(null);
-      setActiveChannelId(null);
-      setMessages([]);
-      setMembers([]);
+      // Only reset active server and channel if there is no token in localStorage.
+      // This prevents wiping out the states while AuthContext is restoring the session on page reload.
+      const storedToken = localStorage.getItem('token');
+      if (!storedToken) {
+        setServers([]);
+        setActiveServerId(null);
+        setActiveChannelId(null);
+        setMessages([]);
+        setMembers([]);
+      }
     }
   }, [token]);
 
@@ -66,6 +85,19 @@ export const ChatProvider = ({ children }) => {
         setMessages((prev) => {
           // Avoid duplicate messages
           if (prev.some((m) => m.id === msg.id)) return prev;
+
+          // If this message was sent by the current user, reconcile and replace the optimistic temp message
+          if (msg.sender?.id === user?.id) {
+            const tempIndex = prev.findIndex(
+              (m) => m.id && m.id.toString().startsWith('temp-') && m.content === msg.content
+            );
+            if (tempIndex !== -1) {
+              const updated = [...prev];
+              updated[tempIndex] = msg;
+              return updated;
+            }
+          }
+
           return [...prev, msg];
         });
       }
@@ -103,19 +135,15 @@ export const ChatProvider = ({ children }) => {
     try {
       const response = await api.get('/api/servers');
       setServers(response.data);
-      if (response.data.length > 0) {
-        // Set default active server and channel if not set yet
-        const defaultServer = response.data[0];
-        if (!activeServerIdRef.current) {
-          setActiveServerId(defaultServer.id);
-          const textChan = defaultServer.channels?.find((c) => c.type === 'text');
-          if (textChan) {
-            setActiveChannelId(textChan.id);
-          }
+      
+      // If we have an activeServerId from localStorage, verify it still exists in the fetched list.
+      // If it doesn't exist anymore, reset to Home (null).
+      if (activeServerIdRef.current) {
+        const serverExists = response.data.some((s) => s.id === activeServerIdRef.current);
+        if (!serverExists) {
+          setActiveServerId(null);
+          setActiveChannelId(null);
         }
-      } else {
-        setActiveServerId(null);
-        setActiveChannelId(null);
       }
     } catch (error) {
       console.error('[ChatContext] Failed to fetch servers from API:', error.message);
