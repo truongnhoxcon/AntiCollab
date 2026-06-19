@@ -6,6 +6,8 @@ const authMiddleware = require('../middlewares/auth.middleware');
 // Protect all user routes with JWT authentication middleware
 router.use(authMiddleware);
 
+router.get('/me', userController.getMe);
+router.post('/me/verify-password', userController.verifyPassword);
 router.get('/me/dms', userController.getMyDMs);
 router.post('/me/dms', userController.startDM);
 router.delete('/me/dms/:dmUserId', userController.hideDM);
@@ -14,3 +16,4 @@ router.post('/me/friends', userController.addFriend);
 router.get('/me/activities', userController.getActivities);
 
 module.exports = router;
+

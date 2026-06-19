@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
+
 
 /**
  * GET /api/users/me/dms
@@ -304,11 +306,84 @@ async function startDM(req, res) {
   }
 }
 
+/**
+ * GET /api/users/me
+ * Returns current user's profile details.
+ */
+async function getMe(req, res) {
+  try {
+    const userId = req.user.id;
+    const userResult = await db.query(
+      'SELECT id, username, email, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ error: 'Internal server error fetching profile' });
+  }
+}
+
+/**
+ * POST /api/users/me/verify-password
+ * Verifies current user's password and returns the real email.
+ */
+async function verifyPassword(req, res) {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    const userResult = await db.query(
+      'SELECT password_hash, email FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Incorrect password.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      email: user.email
+    });
+  } catch (error) {
+    console.error('Error verifying password:', error);
+    return res.status(500).json({ error: 'Internal server error verifying password' });
+  }
+}
+
 module.exports = {
   getMyDMs,
   hideDM,
   getMyFriends,
   addFriend,
   getActivities,
-  startDM
+  startDM,
+  getMe,
+  verifyPassword
 };
+

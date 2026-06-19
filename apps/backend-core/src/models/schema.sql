@@ -101,3 +101,8 @@ INSERT INTO activities (id, user_id, name, type, details) VALUES
 ('a3333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333333', 'VS Code', 'playing', 'Debugging Batcomputer'),
 ('a4444444-4444-4444-4444-444444444444', '44444444-4444-4444-4444-444444444444', 'Daily Bugle App', 'playing', 'Reading News')
 ON CONFLICT (id) DO NOTHING;
+
+-- Add server profile columns to server_members table
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(50);
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS avatar VARCHAR(100);
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS about_me VARCHAR(190);

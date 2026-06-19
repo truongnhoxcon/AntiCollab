@@ -199,11 +199,67 @@ async function joinServer(req, res) {
   }
 }
 
+async function getServerMemberProfile(req, res) {
+  try {
+    const { serverId } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.query(
+      'SELECT nickname, avatar, about_me as "aboutMe" FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found in this server' });
+    }
+
+    const profile = result.rows[0];
+    return res.status(200).json({
+      nickname: profile.nickname || '',
+      avatar: profile.avatar || '',
+      aboutMe: profile.aboutMe || ''
+    });
+  } catch (error) {
+    console.error('Error fetching server member profile:', error);
+    return res.status(500).json({ error: 'Internal server error fetching member profile' });
+  }
+}
+
+async function updateServerMemberProfile(req, res) {
+  try {
+    const { serverId } = req.params;
+    const userId = req.user.id;
+    const { nickname, avatar, aboutMe } = req.body;
+
+    const result = await db.query(
+      `UPDATE server_members 
+       SET nickname = $1, avatar = $2, about_me = $3 
+       WHERE server_id = $4 AND user_id = $5 
+       RETURNING nickname, avatar, about_me as "aboutMe"`,
+      [nickname || '', avatar || '', aboutMe || '', serverId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found in this server' });
+    }
+
+    return res.status(200).json({
+      message: 'Server profile updated successfully',
+      profile: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating server member profile:', error);
+    return res.status(500).json({ error: 'Internal server error updating member profile' });
+  }
+}
+
 module.exports = {
   createServer,
   getVoiceCredentials,
   getUserServers,
   joinServer,
+  getServerMemberProfile,
+  updateServerMemberProfile,
 };
 
 
