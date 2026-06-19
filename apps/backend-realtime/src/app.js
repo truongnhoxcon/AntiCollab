@@ -6,6 +6,7 @@ const { connectAll, isConnected } = require('./config/redis');
 const socketAuthMiddleware = require('./middlewares/socketAuth.middleware');
 const { registerChatHandler, registerRedisMessageSubscriber } = require('./handlers/chat.handler');
 const { registerPresenceHandler, registerRedisPresenceSubscriber } = require('./handlers/presence.handler');
+const { registerWebRTCHandler } = require('./signaling/webrtc.handler');
 
 const app = express();
 const server = http.createServer(app);
@@ -31,6 +32,7 @@ io.on('connection', (socket) => {
   // Register events handlers
   registerChatHandler(io, socket);
   registerPresenceHandler(io, socket);
+  registerWebRTCHandler(io, socket);
 });
 
 // Simple HTTP health check endpoint for ALB target group

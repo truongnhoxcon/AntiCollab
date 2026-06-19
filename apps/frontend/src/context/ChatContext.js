@@ -297,6 +297,7 @@ export const ChatProvider = ({ children }) => {
         createServer,
         createChannel,
         fetchServers,
+        socket,
       }}
     >
       {children}

@@ -3,17 +3,19 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 require('dotenv').config();
 
-const hasAwsCredentials = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
-const hasContainerCredentials = !!(process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI);
-
-// Fallback to mock URL if no AWS access keys are found and we are not in an AWS container environment
-const useMockS3 = !hasAwsCredentials && !hasContainerCredentials;
+const isProduction = process.env.NODE_ENV === 'production';
 
 let s3Client = null;
-if (!useMockS3) {
+let useMockS3 = true;
+
+if (isProduction) {
+  useMockS3 = false;
   s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
+    region: process.env.AWS_REGION || 'ap-southeast-1',
   });
+} else {
+  // Local development fallback to mock S3
+  useMockS3 = true;
 }
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'realtime-collab-files-default';

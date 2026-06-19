@@ -23,19 +23,67 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
-// Auto-bootstrap database schema from schema.sql
-(async () => {
+// Add database schema production migration function
+async function runProductionMigration() {
+  if (process.env.NODE_ENV !== 'production') {
+    return;
+  }
+
   try {
-    const schemaPath = path.join(__dirname, '..', 'models', 'schema.sql');
-    if (fs.existsSync(schemaPath)) {
-      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-      await pool.query(schemaSql);
-      console.log('[Database Bootstrap] PostgreSQL schema initialized/verified successfully.');
+    console.log('[Migration] Checking if database requires schema migration...');
+    // Check if 'users' table exists
+    const checkResult = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `);
+
+    const usersTableExists = checkResult.rows[0]?.exists;
+
+    if (!usersTableExists) {
+      console.log('[Migration] Table "users" does not exist. Running database migration...');
+      
+      let schemaPath = path.join(__dirname, '..', 'models', 'schema.sql');
+      
+      if (!fs.existsSync(schemaPath)) {
+        schemaPath = path.resolve(process.cwd(), 'apps', 'backend-core', 'src', 'models', 'schema.sql');
+      }
+
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        await pool.query(schemaSql);
+        console.log('[Migration] Database migration schema executed successfully.');
+      } else {
+        throw new Error(`schema.sql file not found at: ${schemaPath}`);
+      }
     } else {
-      console.warn(`[Database Bootstrap] Warning: schema.sql file not found at: ${schemaPath}`);
+      console.log('[Migration] Database is already initialized. Skipping migration.');
     }
   } catch (error) {
-    console.error('[Database Bootstrap] PostgreSQL schema initialization failed:', error.message);
+    console.error('[Migration] Database migration failed:', error);
+  }
+}
+
+// Auto-bootstrap database schema on startup
+(async () => {
+  if (process.env.NODE_ENV === 'production') {
+    await runProductionMigration();
+  } else {
+    // Local development auto-bootstrap
+    try {
+      const schemaPath = path.join(__dirname, '..', 'models', 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        await pool.query(schemaSql);
+        console.log('[Database Bootstrap] PostgreSQL schema initialized/verified successfully.');
+      } else {
+        console.warn(`[Database Bootstrap] Warning: schema.sql file not found at: ${schemaPath}`);
+      }
+    } catch (error) {
+      console.error('[Database Bootstrap] PostgreSQL schema initialization failed:', error.message);
+    }
   }
 })();
 

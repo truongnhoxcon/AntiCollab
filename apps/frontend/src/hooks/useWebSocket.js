@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { WS_URL } from '../services/api.js';
 
 /**
  * Custom hook to manage WebSocket connection life-cycle.
@@ -19,9 +20,15 @@ export const useWebSocket = (token) => {
       return;
     }
 
+    // Normalize connection URL to prevent duplication of path component '/ws' with path option
+    let socketHost = WS_URL;
+    if (socketHost.endsWith('/ws')) {
+      socketHost = socketHost.slice(0, -3);
+    }
+
     // Initialize Connection to real-time engine
     // Explicitly enforce path and auth token handoff
-    const socket = io('http://localhost:4000', {
+    const socket = io(socketHost, {
       auth: { token },
       path: '/ws',
       transports: ['websocket'],
