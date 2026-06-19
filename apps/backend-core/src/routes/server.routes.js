@@ -20,4 +20,8 @@ router.post('/:serverId/channels', authMiddleware, tenantMiddleware, channelCont
 // Fetch WebRTC ICE / STUN / TURN credentials (authentication + tenant check required)
 router.get('/:serverId/voice-credentials', authMiddleware, tenantMiddleware, serverController.getVoiceCredentials);
 
+// Get/Update server member profiles
+router.get('/:serverId/members/me', authMiddleware, tenantMiddleware, serverController.getServerMemberProfile);
+router.put('/:serverId/members/me', authMiddleware, tenantMiddleware, serverController.updateServerMemberProfile);
+
 module.exports = router;

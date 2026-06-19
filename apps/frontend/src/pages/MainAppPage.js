@@ -13,6 +13,7 @@ import {
   Plus,
   Compass,
   ChevronDown,
+  ChevronUp,
   Search,
   Bell,
   Pin,
@@ -40,11 +41,15 @@ import {
   UserPlus,
   FolderPlus,
   CheckSquare,
+  Check,
   Shield,
   Edit2,
   Copy,
   PlusCircle,
-  MoreVertical
+  MoreVertical,
+  RefreshCw,
+  Pencil,
+  Trash
 } from 'lucide-react';
 
 const templates = [
@@ -162,6 +167,138 @@ export default function MainAppPage() {
   // Settings states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState('account');
+  const [isAccountExpanded, setIsAccountExpanded] = useState(true);
+  
+  const [username, setUsername] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
+  const [maskedPhone, setMaskedPhone] = useState('********2433');
+  const [isEmailRevealed, setIsEmailRevealed] = useState(false);
+  const [isPhoneRevealed, setIsPhoneRevealed] = useState(false);
+  const [realEmail, setRealEmail] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const [isAppearanceExpanded, setIsAppearanceExpanded] = useState(settingsTab === 'appearance');
+  const [selectedTheme, setSelectedTheme] = useState('dark'); // 'light', 'dark', 'sync'
+  const [showMedia, setShowMedia] = useState(true);
+  const [showEmbeds, setShowEmbeds] = useState(true);
+  const [showReactions, setShowReactions] = useState(true);
+  const [previewMarkdown, setPreviewMarkdown] = useState(true);
+  const [showSendBtn, setShowSendBtn] = useState(false);
+  const [devMode, setDevMode] = useState(false);
+  const [hardwareAccel, setHardwareAccel] = useState(true);
+
+  const [isVoiceExpanded, setIsVoiceExpanded] = useState(settingsTab === 'voice');
+  const [micVolume, setMicVolume] = useState(80);
+  const [speakerVolume, setSpeakerVolume] = useState(80);
+  const [inputMode, setInputMode] = useState('activity');
+  const [isTestingMic, setIsTestingMic] = useState(false);
+  const [isTestingVideo, setIsTestingVideo] = useState(false);
+  const [selectedMic, setSelectedMic] = useState('Default - MacBook Pro Microphone');
+  const [selectedSpeaker, setSelectedSpeaker] = useState('Default - MacBook Pro Speakers');
+  const [selectedCamera, setSelectedCamera] = useState('FaceTime HD Camera');
+
+  const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(settingsTab === 'notifications');
+  const [desktopNotifs, setDesktopNotifs] = useState(true);
+  const [unreadBadge, setUnreadBadge] = useState(true);
+  const [soundNewMsg, setSoundNewMsg] = useState(true);
+  const [soundIncomingRing, setSoundIncomingRing] = useState(true);
+  const [disableAllSounds, setDisableAllSounds] = useState(false);
+  const [communicationEmails, setCommunicationEmails] = useState(true);
+  const [showAdvancedNotif, setShowAdvancedNotif] = useState(false);
+  const [ttsAllowed, setTtsAllowed] = useState(false);
+  const [ttsSpeakMode, setTtsSpeakMode] = useState('never');
+
+  const [statusText, setStatusText] = useState('');
+  const [statusEmoji, setStatusEmoji] = useState('😊');
+  const [clearAfter, setClearAfter] = useState('dont_clear');
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [tempStatusText, setTempStatusText] = useState('');
+  const [tempStatusEmoji, setTempStatusEmoji] = useState('😊');
+  const [tempClearAfter, setTempClearAfter] = useState('dont_clear');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  useEffect(() => {
+    if (isStatusModalOpen) {
+      setTempStatusText(statusText);
+      setTempStatusEmoji(statusEmoji || '😊');
+      setTempClearAfter(clearAfter);
+    }
+  }, [isStatusModalOpen]);
+
+  const [serverPrivacy, setServerPrivacy] = useState(true);
+  const [friendRequests, setFriendRequests] = useState({
+    everyone: false,
+    friendsOfFriends: true,
+    serverMembers: true
+  });
+
+  const maskEmail = (email) => {
+    if (!email) return '';
+    const [name, domain] = email.split('@');
+    if (!domain) return email;
+    if (name.length <= 2) {
+      return `${name[0]}*@${domain}`;
+    }
+    const visibleStart = name[0] || '';
+    const visibleEnd = name[name.length - 1] || '';
+    const maskedLength = name.length - 2;
+    return `${visibleStart}${'*'.repeat(maskedLength)}${visibleEnd}@${domain}`;
+  };
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await api.get('/api/users/me');
+        if (response.data && response.data.user) {
+          const u = response.data.user;
+          setUsername(u.username);
+          setRealEmail(u.email);
+          setMaskedEmail(maskEmail(u.email));
+        }
+      } catch (err) {
+        console.error('Failed to fetch user data:', err);
+        if (user) {
+          setUsername(user.username || '');
+          setRealEmail(user.email || '');
+          setMaskedEmail(maskEmail(user.email || ''));
+        }
+      }
+    };
+
+    if (isSettingsOpen) {
+      fetchUserData();
+    }
+  }, [isSettingsOpen, user]);
+
+  const handleVerifyPassword = async (e) => {
+    if (e) e.preventDefault();
+    setIsVerifying(true);
+    setPasswordError('');
+
+    try {
+      const response = await api.post('/api/users/me/verify-password', {
+        password: confirmPassword
+      });
+
+      if (response.data && response.data.email) {
+        setRealEmail(response.data.email);
+        setIsEmailRevealed(true);
+        setShowPasswordModal(false);
+        setConfirmPassword('');
+      } else {
+        setPasswordError('Failed to verify password.');
+      }
+    } catch (err) {
+      console.error('Error verifying password:', err);
+      const errMsg = err.response?.data?.error || 'Incorrect password.';
+      setPasswordError(errMsg);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
   const [profileTab, setProfileTab] = useState('user'); // 'user' or 'server'
   const [displayName, setDisplayName] = useState('');
   const [pronouns, setPronouns] = useState('');
@@ -169,6 +306,51 @@ export default function MainAppPage() {
   const [bannerColor, setBannerColor] = useState('#5865F2');
   const [avatarSeed, setAvatarSeed] = useState('');
   const [isDirty, setIsDirty] = useState(false);
+
+  const [joinedServers, setJoinedServers] = useState([]);
+  const [isLoadingServers, setIsLoadingServers] = useState(true);
+  const [selectedServerId, setSelectedServerId] = useState('');
+
+  const [serverProfiles, setServerProfiles] = useState({});
+
+  const initialServerProfilesRef = useRef({});
+
+  const [serverNickname, setServerNickname] = useState('');
+  const [serverAvatar, setServerAvatar] = useState('');
+  const [serverAboutMe, setServerAboutMe] = useState('');
+
+  const handleServerChange = (newServerId) => {
+    // 1. Save current state to the profiles dictionary
+    if (selectedServerId) {
+      setServerProfiles(prev => ({
+        ...prev,
+        [selectedServerId]: {
+          nickname: serverNickname,
+          avatar: serverAvatar,
+          aboutMe: serverAboutMe
+        }
+      }));
+    }
+    // 2. Load new state from the profiles dictionary
+    const nextProfile = serverProfiles[newServerId] || { nickname: '', avatar: '', aboutMe: '' };
+    setServerNickname(nextProfile.nickname);
+    setServerAvatar(nextProfile.avatar);
+    setServerAboutMe(nextProfile.aboutMe);
+    
+    setSelectedServerId(newServerId);
+  };
+
+  const getCurrentServerProfiles = () => {
+    if (!selectedServerId) return serverProfiles;
+    return {
+      ...serverProfiles,
+      [selectedServerId]: {
+        nickname: serverNickname,
+        avatar: serverAvatar,
+        aboutMe: serverAboutMe
+      }
+    };
+  };
 
   const initialSettingsRef = useRef({
     displayName: '',
@@ -198,6 +380,12 @@ export default function MainAppPage() {
         setPronouns('');
         setAboutMe('');
         setBannerColor('#5865F2');
+
+        setServerProfiles({});
+        initialServerProfilesRef.current = {};
+        setServerNickname('');
+        setServerAvatar('');
+        setServerAboutMe('');
       }
       setIsDirty(false);
     }
@@ -206,13 +394,98 @@ export default function MainAppPage() {
   // Track profile form modifications
   useEffect(() => {
     if (isSettingsOpen) {
-      const changed = displayName !== initialSettingsRef.current.displayName ||
-                      pronouns !== initialSettingsRef.current.pronouns ||
-                      aboutMe !== initialSettingsRef.current.aboutMe ||
-                      bannerColor !== initialSettingsRef.current.bannerColor;
-      setIsDirty(changed);
+      const currentMap = getCurrentServerProfiles();
+      const serverProfilesChanged = JSON.stringify(currentMap) !== JSON.stringify(initialServerProfilesRef.current);
+      const userProfileChanged = displayName !== initialSettingsRef.current.displayName ||
+                                 pronouns !== initialSettingsRef.current.pronouns ||
+                                 aboutMe !== initialSettingsRef.current.aboutMe ||
+                                 bannerColor !== initialSettingsRef.current.bannerColor;
+      setIsDirty(userProfileChanged || serverProfilesChanged);
     }
-  }, [displayName, pronouns, aboutMe, bannerColor, isSettingsOpen]);
+  }, [displayName, pronouns, aboutMe, bannerColor, serverNickname, serverAvatar, serverAboutMe, selectedServerId, serverProfiles, isSettingsOpen]);
+
+  // Fetch joined servers when settings modal is open and on the Server Profiles tab
+  useEffect(() => {
+    if (isSettingsOpen && profileTab === 'server') {
+      const fetchUserServers = async () => {
+        setIsLoadingServers(true);
+        try {
+          const response = await api.get('/api/servers');
+          setJoinedServers(response.data);
+          if (response.data && response.data.length > 0) {
+            setSelectedServerId(response.data[0].id);
+          } else {
+            setSelectedServerId('');
+          }
+        } catch (error) {
+          console.error('[MainAppPage] Failed to fetch servers for profile tab:', error);
+        } finally {
+          setIsLoadingServers(false);
+        }
+      };
+      fetchUserServers();
+    }
+  }, [profileTab, isSettingsOpen]);
+
+  // Fetch server profile details when selectedServerId changes
+  useEffect(() => {
+    if (isSettingsOpen && profileTab === 'server' && selectedServerId) {
+      const fetchServerProfile = async () => {
+        try {
+          const response = await api.get(`/api/servers/${selectedServerId}/members/me`);
+          if (response.data) {
+            const nick = response.data.nickname || '';
+            const av = response.data.avatar || '';
+            const bio = response.data.aboutMe || '';
+            
+            setServerNickname(nick);
+            setServerAvatar(av);
+            setServerAboutMe(bio);
+            
+            initialServerProfilesRef.current = {
+              ...initialServerProfilesRef.current,
+              [selectedServerId]: {
+                nickname: nick,
+                avatar: av,
+                aboutMe: bio
+              }
+            };
+            setServerProfiles(prev => ({
+              ...prev,
+              [selectedServerId]: {
+                nickname: nick,
+                avatar: av,
+                aboutMe: bio
+              }
+            }));
+          }
+        } catch (error) {
+          console.error('[MainAppPage] Failed to fetch server member profile:', error);
+          setServerNickname('');
+          setServerAvatar('');
+          setServerAboutMe('');
+          
+          initialServerProfilesRef.current = {
+            ...initialServerProfilesRef.current,
+            [selectedServerId]: {
+              nickname: '',
+              avatar: '',
+              aboutMe: ''
+            }
+          };
+          setServerProfiles(prev => ({
+            ...prev,
+            [selectedServerId]: {
+              nickname: '',
+              avatar: '',
+              aboutMe: ''
+            }
+          }));
+        }
+      };
+      fetchServerProfile();
+    }
+  }, [selectedServerId, profileTab, isSettingsOpen]);
 
 
   // Fetch DMs
@@ -917,7 +1190,17 @@ export default function MainAppPage() {
 
         {/* BOTTOM USER PANEL */}
         <footer className="h-[52px] bg-[#232428] flex items-center justify-between px-2.5 flex-shrink-0">
-          <div className="flex items-center gap-2 max-w-[120px] cursor-pointer p-1 rounded hover:bg-[#35373C] transition">
+          <div
+            onClick={() => {
+              setIsSettingsOpen(true);
+              setSettingsTab('profiles');
+              setIsAccountExpanded(false);
+              setIsAppearanceExpanded(false);
+              setIsVoiceExpanded(false);
+              setIsNotificationsExpanded(false);
+            }}
+            className="flex items-center gap-2 max-w-[120px] cursor-pointer p-1 rounded hover:bg-[#35373C] transition"
+          >
             <div className="relative">
               <img
                 src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user?.username || 'You'}`}
@@ -955,7 +1238,14 @@ export default function MainAppPage() {
             </button>
 
             <button
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => {
+                setIsSettingsOpen(true);
+                setSettingsTab('account');
+                setIsAccountExpanded(true);
+                setIsAppearanceExpanded(false);
+                setIsVoiceExpanded(false);
+                setIsNotificationsExpanded(false);
+              }}
               className="p-1.5 rounded hover:bg-[#3F4147] hover:text-gray-200 transition"
               title="User Settings"
             >
@@ -1773,7 +2063,13 @@ export default function MainAppPage() {
                 
                 {/* Mini Profile Card */}
                 <div
-                  onClick={() => setSettingsTab('profiles')}
+                  onClick={() => {
+                    setSettingsTab('profiles');
+                    setIsAccountExpanded(false);
+                    setIsAppearanceExpanded(false);
+                    setIsVoiceExpanded(false);
+                    setIsNotificationsExpanded(false);
+                  }}
                   className="bg-[#1E1F22] hover:bg-[#2B2D31] cursor-pointer rounded-md p-2 flex items-center gap-3 mb-4 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-gray-500 overflow-hidden flex-shrink-0">
@@ -1786,7 +2082,7 @@ export default function MainAppPage() {
                   <div className="flex flex-col min-w-0 leading-tight">
                     <span className="text-white font-bold text-sm truncate">{user?.username}</span>
                     <span className="text-gray-400 text-xs flex items-center gap-1 mt-0.5 font-medium">
-                      Sửa Hồ Sơ
+                      Edit Profile
                       <Edit2 size={12} className="text-gray-400" />
                     </span>
                   </div>
@@ -1797,21 +2093,55 @@ export default function MainAppPage() {
                   <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-wider px-2.5 pb-1.5">User Settings</h3>
                   <div className="space-y-0.5">
                     <button
-                      onClick={() => setSettingsTab('account')}
+                      onClick={() => {
+                        setSettingsTab('account');
+                        setIsAccountExpanded(!isAccountExpanded);
+                        setIsAppearanceExpanded(false);
+                        setIsVoiceExpanded(false);
+                        setIsNotificationsExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'account' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
-                      My Account
+                      Account
                     </button>
+
+                    {/* Sub-menu under Account */}
+                    {isAccountExpanded && (
+                      <div className="border-l-2 border-gray-600 ml-4 pl-4 space-y-3 mt-2 mb-2 flex flex-col">
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('account-info');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Account Info
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('password-security');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Password & Security
+                        </button>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setSettingsTab('profiles')}
-                      className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
-                        ${settingsTab === 'profiles' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
-                    >
-                      Profiles
-                    </button>
-                    <button
-                      onClick={() => setSettingsTab('privacy')}
+                      onClick={() => {
+                        setSettingsTab('privacy');
+                        setIsAccountExpanded(false);
+                        setIsAppearanceExpanded(false);
+                        setIsVoiceExpanded(false);
+                        setIsNotificationsExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'privacy' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
@@ -1825,28 +2155,194 @@ export default function MainAppPage() {
                   <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-wider px-2.5 pb-1.5">App Settings</h3>
                   <div className="space-y-0.5">
                     <button
-                      onClick={() => setSettingsTab('appearance')}
+                      onClick={() => {
+                        setSettingsTab('appearance');
+                        setIsAppearanceExpanded(!isAppearanceExpanded);
+                        setIsAccountExpanded(false);
+                        setIsVoiceExpanded(false);
+                        setIsNotificationsExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'appearance' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
                       Appearance
                     </button>
+
+                    {/* Sub-menu under Appearance */}
+                    {isAppearanceExpanded && (
+                      <div className="border-l-2 border-gray-600 ml-4 pl-4 space-y-3 mt-2 mb-2 flex flex-col">
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('appearance-theme');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Theme
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('appearance-messages');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Messages
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('appearance-chatbox');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Chat Box
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('appearance-advanced');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Advanced
+                        </button>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setSettingsTab('voice')}
+                      onClick={() => {
+                        setSettingsTab('voice');
+                        setIsVoiceExpanded(!isVoiceExpanded);
+                        setIsAccountExpanded(false);
+                        setIsAppearanceExpanded(false);
+                        setIsNotificationsExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'voice' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
                       Voice & Video
                     </button>
+
+                    {/* Sub-menu under Voice & Video */}
+                    {isVoiceExpanded && (
+                      <div className="border-l-2 border-gray-600 ml-4 pl-4 space-y-3 mt-2 mb-2 flex flex-col">
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('voice-settings');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Voice Settings
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('video-settings');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Camera
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('advanced-voice');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Advanced
+                        </button>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setSettingsTab('notifications')}
+                      onClick={() => {
+                        setSettingsTab('notifications');
+                        setIsNotificationsExpanded(!isNotificationsExpanded);
+                        setIsAccountExpanded(false);
+                        setIsAppearanceExpanded(false);
+                        setIsVoiceExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'notifications' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
                       Notifications
                     </button>
+
+                    {/* Sub-menu under Notifications */}
+                    {isNotificationsExpanded && (
+                      <div className="border-l-2 border-gray-600 ml-4 pl-4 space-y-3 mt-2 mb-2 flex flex-col">
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('notif-overview');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Overview
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('notif-sounds');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Sounds
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('notif-email');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Email
+                        </button>
+                        <button
+                          onClick={() => {
+                            const elem = document.getElementById('notif-advanced');
+                            if (elem) {
+                              elem.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="text-left text-xs font-semibold text-gray-400 hover:text-white transition"
+                        >
+                          Advanced
+                        </button>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setSettingsTab('language')}
+                      onClick={() => {
+                        setSettingsTab('language');
+                        setIsAccountExpanded(false);
+                        setIsAppearanceExpanded(false);
+                        setIsVoiceExpanded(false);
+                        setIsNotificationsExpanded(false);
+                      }}
                       className={`w-full text-left px-2.5 py-1.5 rounded text-sm font-semibold transition
                         ${settingsTab === 'language' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
@@ -1881,125 +2377,186 @@ export default function MainAppPage() {
                 <span className="text-[9px] font-bold uppercase select-none">ESC</span>
               </button>
 
-              <div className="flex-grow py-14 px-10 overflow-y-auto custom-scrollbar pb-28">
+              <div className="flex-grow py-14 px-10 overflow-y-auto custom-scrollbar scroll-smooth pb-28">
                 <div className="max-w-3xl w-full">
                 {settingsTab === 'account' ? (
-                  // My Account View
+                  // Account View
                   <div>
-                    <h2 className="text-xl font-bold text-white mb-6">My Account</h2>
+                    <h2 className="text-xl font-bold text-white mb-6">Account</h2>
                     
-                    {/* Profile Card */}
-                    <div className="bg-[#1E1F22] rounded-xl overflow-hidden shadow-lg">
-                      {/* Banner */}
-                      <div className="h-24 bg-[#5865F2] relative">
-                        {/* Overlapping Avatar */}
-                        <div className="absolute left-4 bottom-0 translate-y-1/2 group cursor-pointer">
-                          <div className="relative">
-                            <img
-                              src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${user?.username || 'You'}`}
-                              alt="Avatar"
-                              className="w-20 h-20 rounded-full border-[6px] border-[#1E1F22] bg-[#2B2D31] object-cover"
-                            />
-                            {/* Edit Overlay */}
-                            <div className="absolute inset-[6px] rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-bold text-white">
-                              EDIT
+                    {/* Section 1: Account Info */}
+                    <div id="account-info" className="space-y-4">
+                      <h3 className="text-lg font-bold text-white mb-4">Account Info</h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-4 space-y-6">
+                        
+                        {/* Username Row */}
+                        <div className="flex justify-between items-center border-b border-[#1E1F22] pb-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Username</span>
+                            <span className="text-sm font-semibold text-white truncate">@{username}</span>
+                          </div>
+                          <button
+                            onClick={() => alert('Editing username is not implemented in this demo.')}
+                            className="bg-[#4E5058] hover:bg-[#6D6F78] text-white px-4 py-1.5 rounded transition-colors text-xs font-bold flex-shrink-0"
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        {/* Email Row */}
+                        <div className="flex justify-between items-center border-b border-[#1E1F22] pb-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Email</span>
+                            <div className="flex items-center">
+                              <span className="text-sm font-semibold text-white truncate">
+                                {isEmailRevealed ? realEmail : maskedEmail}
+                              </span>
+                              {isEmailRevealed ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsEmailRevealed(false)}
+                                  className="text-blue-400 hover:underline text-xs ml-2.5 font-bold"
+                                >
+                                  Hide
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowPasswordModal(true);
+                                    setPasswordError('');
+                                    setConfirmPassword('');
+                                  }}
+                                  className="text-blue-400 hover:underline text-xs ml-2.5 font-bold"
+                                >
+                                  Reveal
+                                </button>
+                              )}
                             </div>
                           </div>
+                          <button
+                            onClick={() => alert('Editing email is not implemented in this demo.')}
+                            className="bg-[#4E5058] hover:bg-[#6D6F78] text-white px-4 py-1.5 rounded transition-colors text-xs font-bold flex-shrink-0"
+                          >
+                            Edit
+                          </button>
                         </div>
-                      </div>
 
-                      {/* Profile Card User Info */}
-                      <div className="bg-[#2B2D31] p-4 pt-12 flex justify-between items-center">
-                        <div className="flex flex-col min-w-0 pr-4">
-                          <span className="text-base font-bold text-white leading-tight truncate">{user?.username}</span>
-                          <span className="text-xs text-gray-400 truncate">@{user?.username?.toLowerCase()}</span>
+                        {/* Phone Number Row */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Phone Number</span>
+                            <div className="flex items-center">
+                              <span className="text-sm font-semibold text-white truncate">
+                                {isPhoneRevealed ? '+84 123 456 789' : maskedPhone}
+                              </span>
+                              {isPhoneRevealed ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsPhoneRevealed(false)}
+                                  className="text-blue-400 hover:underline text-xs ml-2.5 font-bold"
+                                >
+                                  Hide
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsPhoneRevealed(true);
+                                  }}
+                                  className="text-blue-400 hover:underline text-xs ml-2.5 font-bold"
+                                >
+                                  Reveal
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => alert('Editing phone number is not implemented in this demo.')}
+                            className="bg-[#4E5058] hover:bg-[#6D6F78] text-white px-4 py-1.5 rounded transition-colors text-xs font-bold flex-shrink-0"
+                          >
+                            Edit
+                          </button>
                         </div>
-                        <button
-                          onClick={() => alert('Editing profile is a placeholder action.')}
-                          className="bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-semibold px-4 py-2 rounded transition flex-shrink-0"
-                        >
-                          Edit User Profile
-                        </button>
-                      </div>
-                    </div>
 
-                    {/* Account Details Container */}
-                    <div className="bg-[#2B2D31] p-4 rounded-xl mt-6 space-y-5 border border-gray-800/10">
-                      
-                      {/* Display Name Row */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col min-w-0 pr-4">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Display Name</span>
-                          <span className="text-sm font-semibold text-white truncate">{user?.username}</span>
-                        </div>
-                        <button
-                          onClick={() => alert('Editing field is not implemented in this demo.')}
-                          className="bg-[#4E5058] hover:bg-[#6D6F78] text-white text-xs font-bold px-3 py-1.5 rounded transition flex-shrink-0"
-                        >
-                          Edit
-                        </button>
-                      </div>
-
-                      {/* Username Row */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col min-w-0 pr-4">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Username</span>
-                          <span className="text-sm font-semibold text-white truncate">@{user?.username?.toLowerCase()}</span>
-                        </div>
-                        <button
-                          onClick={() => alert('Editing field is not implemented in this demo.')}
-                          className="bg-[#4E5058] hover:bg-[#6D6F78] text-white text-xs font-bold px-3 py-1.5 rounded transition flex-shrink-0"
-                        >
-                          Edit
-                        </button>
-                      </div>
-
-                      {/* Email Row */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col min-w-0 pr-4">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Email</span>
-                          <span className="text-sm font-semibold text-white truncate">
-                            {user?.email ? (
-                              (() => {
-                                const [name, domain] = user.email.split('@');
-                                if (!domain) return user.email;
-                                return `${name[0]}******${name[name.length - 1] || ''}@${domain}`;
-                              })()
-                            ) : 'No email address added'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => alert('Editing field is not implemented in this demo.')}
-                          className="bg-[#4E5058] hover:bg-[#6D6F78] text-white text-xs font-bold px-3 py-1.5 rounded transition flex-shrink-0"
-                        >
-                          Edit
-                        </button>
-                      </div>
-
-                      {/* Phone Number Row */}
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col min-w-0 pr-4">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Phone Number</span>
-                          <span className="text-sm font-semibold text-white truncate">You haven't added a phone number yet.</span>
-                        </div>
-                        <button
-                          onClick={() => alert('Editing field is not implemented in this demo.')}
-                          className="bg-[#4E5058] hover:bg-[#6D6F78] text-white text-xs font-bold px-3 py-1.5 rounded transition flex-shrink-0"
-                        >
-                          Edit
-                        </button>
                       </div>
                     </div>
 
-                    {/* Password and Authentication */}
-                    <div className="border-t border-[#1E1F22] mt-6 pt-6">
-                      <h3 className="text-base font-bold text-white mb-2">Password and Authentication</h3>
-                      <button
-                        onClick={() => alert('Password modification is not supported in this mock interface.')}
-                        className="bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-bold px-4 py-2 rounded transition shadow-md"
-                      >
-                        Change Password
-                      </button>
+                    {/* Section 2: Password & Security */}
+                    <div id="password-security" className="mt-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Password & Security</h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-4 flex flex-col space-y-4">
+                        
+                        {/* Password Row */}
+                        <div className="flex justify-between items-center border-b border-[#1E1F22] pb-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Password</span>
+                            <span className="text-sm font-semibold text-white">••••••••••••</span>
+                          </div>
+                          <button
+                            onClick={() => alert('Password modification is not supported in this mock interface.')}
+                            className="bg-[#4E5058] hover:bg-[#6D6F78] text-white px-4 py-1.5 rounded transition-colors text-xs font-bold flex-shrink-0"
+                          >
+                            Edit
+                          </button>
+                        </div>
+
+                        {/* MFA Row */}
+                        <div className="flex justify-between items-center border-b border-[#1E1F22] pb-4 cursor-pointer hover:opacity-95" onClick={() => alert('MFA set up is not implemented.')}>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-semibold text-white">Multi-Factor Authentication</span>
+                            <span className="text-xs text-gray-400 mt-0.5">Add an extra layer of security to your account.</span>
+                          </div>
+                          <div className="flex items-center text-gray-400 gap-1 hover:text-white transition">
+                            <span className="text-xs font-bold">Set up</span>
+                            <ChevronRight size={16} />
+                          </div>
+                        </div>
+
+                        {/* Devices Row */}
+                        <div className="flex justify-between items-center cursor-pointer hover:opacity-95" onClick={() => alert('Devices view is not implemented.')}>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-semibold text-white">Logged-in Devices</span>
+                            <span className="text-xs text-gray-400 mt-0.5">Manage and sign out of your active sessions.</span>
+                          </div>
+                          <div className="flex items-center text-gray-400 gap-1 hover:text-white transition">
+                            <span className="text-xs font-bold text-gray-400">6 devices</span>
+                            <ChevronRight size={16} />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 3: Danger Zone */}
+                    <div className="border-b border-[#313338] my-8" />
+                    
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div className="flex flex-col min-w-0 pr-4">
+                          <span className="text-sm font-semibold text-white">Disable your account</span>
+                          <span className="text-xs text-gray-400 mt-0.5">Temporarily disable your account.</span>
+                        </div>
+                        <button
+                          onClick={() => alert('Disabling account is not supported in this mock.')}
+                          className="text-red-400 hover:text-white hover:bg-red-500 hover:underline px-4 py-2 rounded text-xs font-bold transition-colors"
+                        >
+                          Disable Account
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between items-center mt-4">
+                        <div className="flex flex-col min-w-0 pr-4">
+                          <span className="text-sm font-semibold text-white">Close your account</span>
+                          <span className="text-xs text-gray-400 mt-0.5">Permanently close your account.</span>
+                        </div>
+                        <button
+                          onClick={() => alert('Deleting account is not supported in this mock.')}
+                          className="bg-red-500 hover:bg-red-600 text-white font-medium px-4 py-2 rounded text-xs font-bold transition-colors"
+                        >
+                          Delete Account
+                        </button>
+                      </div>
                     </div>
 
                   </div>
@@ -2027,177 +2584,1088 @@ export default function MainAppPage() {
                       </button>
                     </div>
 
-                    {profileTab === 'server' ? (
-                      <div className="py-10 text-gray-400 text-sm">
-                        Server-specific profiles coming soon.
-                      </div>
-                    ) : (
-                      // User Profile Form and Preview
-                      <div className="flex flex-col lg:flex-row gap-8 mt-6">
-                        {/* Left Column: Form Controls */}
-                        <div className="flex-1 space-y-6">
-                          
-                          {/* Display Name */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Display Name</label>
-                            <input
-                              type="text"
-                              value={displayName}
-                              onChange={(e) => setDisplayName(e.target.value)}
-                              placeholder={user?.username || "YUTO"}
-                              className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                            />
-                          </div>
+                    {(() => {
+                      const selectedServerName = joinedServers.find(s => s.id === selectedServerId)?.name || '';
+                      
+                      const activePreviewName = profileTab === 'server' && serverNickname.trim() 
+                        ? serverNickname 
+                        : (displayName.trim() || user?.username || 'YUTO');
 
-                          {/* Pronouns */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Pronouns</label>
-                            <input
-                              type="text"
-                              value={pronouns}
-                              onChange={(e) => setPronouns(e.target.value)}
-                              placeholder="They/Them"
-                              className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                            />
-                          </div>
+                      const activePreviewAvatar = profileTab === 'server' && serverAvatar.trim()
+                        ? serverAvatar
+                        : (avatarSeed || user?.username || 'You');
 
-                          {/* Avatar Section */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Avatar</label>
-                            <div className="flex items-center gap-3 mt-1">
-                              <button
-                                onClick={() => {
-                                  const seed = prompt("Enter a seed name/username to customize your avatar:", avatarSeed || user?.username || "");
-                                  if (seed !== null) setAvatarSeed(seed);
-                                }}
-                                className="bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-semibold px-4 py-2 rounded transition"
-                              >
-                                Change Avatar
-                              </button>
-                              <button
-                                onClick={() => setAvatarSeed("default")}
-                                className="text-white hover:underline text-xs font-semibold px-4 py-2 transition bg-transparent"
-                              >
-                                Remove Avatar
-                              </button>
-                            </div>
-                          </div>
+                      const activePreviewAboutMe = profileTab === 'server' && serverAboutMe.trim()
+                        ? serverAboutMe
+                        : (aboutMe.trim() || 'No description provided.');
 
-                          {/* Banner Color */}
-                          <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Banner Color</label>
-                            <div className="flex items-center gap-3">
-                              <label
-                                className="relative w-12 h-12 rounded cursor-pointer border border-gray-700/50 shadow-inner flex items-center justify-center transition hover:opacity-90"
-                                style={{ backgroundColor: bannerColor }}
-                              >
-                                <input
-                                  type="color"
-                                  value={bannerColor}
-                                  onChange={(e) => setBannerColor(e.target.value)}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
-                                <span className="text-white bg-black/40 p-1 rounded-full">
-                                  {/* Pencil icon */}
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
-                                </span>
-                              </label>
-                              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">{bannerColor}</span>
-                            </div>
-                          </div>
+                      const previewLabel = profileTab === 'server' 
+                        ? `PREVIEW FOR ${selectedServerName.toUpperCase()}` 
+                        : 'PREVIEW';
 
-                          {/* About Me */}
-                          <div className="relative">
-                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">About Me</label>
-                            <textarea
-                              value={aboutMe}
-                              onChange={(e) => {
-                                if (e.target.value.length <= 190) {
-                                  setAboutMe(e.target.value);
-                                }
-                              }}
-                              placeholder="Tell us about yourself..."
-                              className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full h-24 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-                            />
-                            <div className="text-[10px] text-gray-400 text-right mt-1">
-                              {aboutMe.length}/190
-                            </div>
-                          </div>
+                      const isFormDisabled = isLoadingServers || joinedServers.length === 0;
 
-                        </div>
-
-                        {/* Right Column: Live Preview Card */}
-                        <div className="w-[340px] flex-shrink-0">
-                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Preview</label>
-                          
-                          {/* Card Container */}
-                          <div className="bg-[#232428] rounded-2xl overflow-hidden shadow-xl relative text-left">
-                            
-                            {/* Banner */}
-                            <div
-                              className="h-[120px] w-full transition-colors duration-200"
-                              style={{ backgroundColor: bannerColor }}
-                            />
-                            
-                            {/* Avatar Box */}
-                            <div className="w-[90px] h-[90px] rounded-full absolute top-[75px] left-[16px] border-[6px] border-[#232428] bg-[#2B2D31]">
-                              <img
-                                src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${avatarSeed || user?.username || 'You'}`}
-                                alt="Avatar"
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                              {/* Status indicator (green online status) */}
-                              <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#232428] flex items-center justify-center">
-                                <div className="w-3.5 h-3.5 rounded-full bg-[#23A55A]" />
-                              </div>
-                            </div>
-
-                            {/* Card Body */}
-                            <div className="bg-[#111214] m-4 mt-[50px] p-4 rounded-lg">
-                              {/* Display Name */}
-                              <div className="text-xl font-bold text-white leading-tight truncate">
-                                {displayName.trim() || user?.username || 'YUTO'}
-                              </div>
-                              {/* Username */}
-                              <div className="text-sm text-gray-400">
-                                @{user?.username?.toLowerCase() || 'chucaom'}
-                              </div>
-                              
-                              {/* Pronouns badge */}
-                              {pronouns.trim() && (
-                                <div className="mt-1.5">
-                                  <span className="inline-block text-[10px] font-bold bg-[#2B2D31] text-gray-300 px-2 py-0.5 rounded">
-                                    {pronouns}
-                                  </span>
+                      return (
+                        <div className="flex flex-col lg:flex-row gap-8 mt-6">
+                          {/* Left Column: Form Controls */}
+                          <div className="flex-1 space-y-6">
+                            {profileTab === 'user' ? (
+                              <>
+                                {/* Display Name */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Display Name</label>
+                                  <input
+                                    type="text"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    placeholder={user?.username || "YUTO"}
+                                    className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                  />
                                 </div>
-                              )}
 
-                              {/* Divider */}
-                              <div className="border-b border-[#2B2D31] my-3" />
+                                {/* Avatar Section */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Avatar</label>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const seed = prompt("Enter a seed name/username to customize your avatar:", avatarSeed || user?.username || "");
+                                        if (seed !== null) setAvatarSeed(seed);
+                                      }}
+                                      className="bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-semibold px-4 py-2 rounded transition"
+                                    >
+                                      Change Avatar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAvatarSeed("default")}
+                                      className="text-white hover:underline text-xs font-semibold px-4 py-2 transition bg-transparent"
+                                    >
+                                      Remove Avatar
+                                    </button>
+                                  </div>
+                                </div>
 
-                              {/* About Me Section */}
-                              <div>
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">About Me</h4>
-                                <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                  {aboutMe.trim() || 'No description provided.'}
+                                {/* Banner Color */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Banner Color</label>
+                                  <div className="flex items-center gap-3">
+                                    <label
+                                      className="relative w-12 h-12 rounded cursor-pointer border border-gray-700/50 shadow-inner flex items-center justify-center transition hover:opacity-90"
+                                      style={{ backgroundColor: bannerColor }}
+                                    >
+                                      <input
+                                        type="color"
+                                        value={bannerColor}
+                                        onChange={(e) => setBannerColor(e.target.value)}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                      />
+                                      <span className="text-white bg-black/40 p-1 rounded-full">
+                                        {/* Pencil icon */}
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                      </span>
+                                    </label>
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider font-mono">{bannerColor}</span>
+                                  </div>
+                                </div>
+
+                                {/* About Me */}
+                                <div className="relative">
+                                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">About Me</label>
+                                  <textarea
+                                    value={aboutMe}
+                                    onChange={(e) => {
+                                      if (e.target.value.length <= 190) {
+                                        setAboutMe(e.target.value);
+                                      }
+                                    }}
+                                    placeholder="Tell us about yourself..."
+                                    className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full h-24 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                  />
+                                  <div className="text-[10px] text-gray-400 text-right mt-1">
+                                    {aboutMe.length}/190
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Helper Text */}
+                                <p className="text-sm text-gray-300 mb-6">
+                                  Show who you are with different profiles for each of your servers.
                                 </p>
-                              </div>
-                            </div>
 
+                                {/* Choose a Server */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                    CHOOSE A SERVER
+                                  </label>
+                                  <select
+                                    value={selectedServerId}
+                                    onChange={(e) => handleServerChange(e.target.value)}
+                                    disabled={isLoadingServers || joinedServers.length === 0}
+                                    className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {isLoadingServers ? (
+                                      <option value="">Loading servers...</option>
+                                    ) : joinedServers.length === 0 ? (
+                                      <option value="">You haven't joined any servers yet.</option>
+                                    ) : (
+                                      joinedServers.map(srv => (
+                                        <option key={srv.id} value={srv.id}>
+                                          {srv.name}
+                                        </option>
+                                      ))
+                                    )}
+                                  </select>
+                                  <div className="border-b border-[#1E1F22] pb-6 mb-6" />
+                                </div>
+
+                                {/* Server Nickname */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                    SERVER NICKNAME
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={serverNickname}
+                                    onChange={(e) => setServerNickname(e.target.value)}
+                                    placeholder={displayName || user?.username || "YUTO"}
+                                    disabled={isFormDisabled}
+                                    className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+
+                                {/* Avatar Section */}
+                                <div>
+                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                    AVATAR
+                                  </label>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const seed = prompt("Enter a seed name/username to customize your server avatar:", serverAvatar || avatarSeed || user?.username || "");
+                                        if (seed !== null) setServerAvatar(seed);
+                                      }}
+                                      disabled={isFormDisabled}
+                                      className="bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-semibold px-4 py-2 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Change Avatar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setServerAvatar("")}
+                                      disabled={isFormDisabled}
+                                      className="text-white hover:underline text-xs font-semibold px-4 py-2 transition bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Remove Avatar
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Bio / About Me Section */}
+                                <div className="relative">
+                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                    ABOUT ME
+                                  </label>
+                                  <textarea
+                                    value={serverAboutMe}
+                                    onChange={(e) => {
+                                      if (e.target.value.length <= 190) {
+                                        setServerAboutMe(e.target.value);
+                                      }
+                                    }}
+                                    placeholder={joinedServers.length === 0 ? "You haven't joined any servers yet." : "Tell this server a bit about yourself..."}
+                                    disabled={isFormDisabled}
+                                    className="bg-[#1E1F22] text-gray-200 rounded p-2.5 w-full h-24 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <div className="text-[10px] text-gray-400 text-right mt-1">
+                                    {serverAboutMe.length}/190
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
-                        </div>
 
-                      </div>
-                    )}
+                          {/* Right Column: Live Preview Card */}
+                          <div className="w-[340px] flex-shrink-0">
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">
+                              {previewLabel}
+                            </label>
+                            
+                            {/* Card Container */}
+                            <div className="bg-[#232428] rounded-2xl overflow-hidden shadow-xl relative text-left">
+                              
+                              {/* Banner */}
+                              <div
+                                className="h-[120px] w-full transition-colors duration-200"
+                                style={{ backgroundColor: bannerColor }}
+                              />
+                              
+                              {/* Avatar Box */}
+                              <div className="w-[90px] h-[90px] rounded-full absolute top-[75px] left-[16px] border-[6px] border-[#232428] bg-[#2B2D31]">
+                                <img
+                                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${activePreviewAvatar}`}
+                                  alt="Avatar"
+                                  className="w-full h-full rounded-full object-cover"
+                                />
+                                {/* Status indicator (green online status) */}
+                                <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#232428] flex items-center justify-center">
+                                  <div className="w-3.5 h-3.5 rounded-full bg-[#23A55A]" />
+                                </div>
+
+                                {/* Custom Status Bubble */}
+                                <div
+                                  className="absolute top-[58px] left-[84px] z-20 group cursor-pointer select-none"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsStatusModalOpen(true);
+                                  }}
+                                >
+                                  {!statusText ? (
+                                    /* Empty State */
+                                    <div className="bg-[#111214] border-[3px] border-[#232428] rounded-full flex items-center justify-center h-7 px-2.5 transition hover:bg-[#1E1F22] relative">
+                                      {/* Tail Border */}
+                                      <div className="absolute left-[-8px] top-[7px] w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#232428] z-0" />
+                                      {/* Tail Fill */}
+                                      <div className="absolute left-[-5px] top-[8px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-[#111214] z-10" />
+                                      
+                                      <span className="text-[10px] font-bold text-gray-300 whitespace-nowrap z-10">
+                                        + Add Status
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    /* Filled State */
+                                    <div className="bg-[#111214] border-[3px] border-[#232428] rounded-xl px-2.5 py-1.5 flex items-start gap-1.5 transition-all duration-200 w-max max-w-[140px] group-hover:max-w-[200px] min-w-[80px] relative">
+                                      {/* Tail Border */}
+                                      <div className="absolute left-[-8px] top-[9px] w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#232428] z-0" />
+                                      {/* Tail Fill */}
+                                      <div className="absolute left-[-5px] top-[10px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-[#111214] z-10" />
+                                      
+                                      {statusEmoji && <span className="text-xs flex-shrink-0 mt-0.5 z-10">{statusEmoji}</span>}
+                                      <span className="text-xs text-white truncate block max-w-[90px] group-hover:whitespace-normal group-hover:break-words group-hover:max-w-[150px] select-text z-10 transition-all duration-200">
+                                        {statusText}
+                                      </span>
+                                      
+                                      {/* Edit & Delete hover icons - positioned floating above the top border */}
+                                      <div className="hidden group-hover:flex items-center gap-1 bg-[#1E1F22] px-1.5 py-0.5 rounded-md border border-gray-700/50 absolute -top-3.5 right-2 shadow-md z-30">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsStatusModalOpen(true);
+                                          }}
+                                          className="text-gray-400 hover:text-white transition p-0.5"
+                                          title="Edit Status"
+                                        >
+                                          <Pencil size={10} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setStatusText('');
+                                          }}
+                                          className="text-gray-400 hover:text-red-400 transition p-0.5"
+                                          title="Delete Status"
+                                        >
+                                          <Trash size={10} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                              </div>
+
+                              {/* Card Body */}
+                              <div className="bg-[#111214] m-4 mt-[50px] p-4 rounded-lg">
+                                {/* Display Name */}
+                                <div className="text-xl font-bold text-white leading-tight truncate">
+                                  {activePreviewName}
+                                </div>
+                                {/* Username */}
+                                <div className="text-sm text-gray-400">
+                                  @{user?.username?.toLowerCase() || 'chucaom'}
+                                </div>
+
+                                {/* Divider */}
+                                <div className="border-b border-[#2B2D31] my-3" />
+
+                                {/* About Me Section */}
+                                <div>
+                                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">About Me</h4>
+                                  <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                    {activePreviewAboutMe}
+                                  </p>
+                                </div>
+                              </div>
+
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })()}
                   </div>
 
+                ) : settingsTab === 'privacy' ? (
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-6">Privacy & Safety</h2>
+                    
+                    {/* Section 1: Server Privacy Defaults */}
+                    <div className="mb-6">
+                      <div className="bg-[#2B2D31] rounded-xl p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-gray-200 font-medium text-sm">
+                              Allow direct messages from server members
+                            </span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              This setting is applied when you join a new server. It does not apply retroactively to your existing servers.
+                            </span>
+                          </div>
+                          
+                          {/* Custom Toggle Switch */}
+                          <div
+                            onClick={() => {
+                              const nextVal = !serverPrivacy;
+                              setServerPrivacy(nextVal);
+                              console.log('[Auto-save] Server Privacy Preference:', nextVal);
+                            }}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              serverPrivacy ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                serverPrivacy ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Who can add you as a friend */}
+                    <div className="mt-8">
+                      <h3 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-wider">
+                        Who can add you as a friend
+                      </h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-1 flex flex-col">
+                        
+                        {/* Everyone Row */}
+                        <div className="flex items-center justify-between p-4 border-b border-[#1E1F22]">
+                          <span className="text-gray-200 font-medium text-sm">Everyone</span>
+                          <div
+                            onClick={() => {
+                              const updated = { ...friendRequests, everyone: !friendRequests.everyone };
+                              setFriendRequests(updated);
+                              console.log('[Auto-save] Friend Request Preference:', updated);
+                            }}
+                            className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                              friendRequests.everyone ? 'bg-[#5865F2] border-[#5865F2]' : 'border-gray-500 bg-transparent'
+                            }`}
+                          >
+                            {friendRequests.everyone && <Check size={16} className="text-white" />}
+                          </div>
+                        </div>
+
+                        {/* Friends of Friends Row */}
+                        <div className="flex items-center justify-between p-4 border-b border-[#1E1F22]">
+                          <span className="text-gray-200 font-medium text-sm">Friends of Friends</span>
+                          <div
+                            onClick={() => {
+                              const updated = { ...friendRequests, friendsOfFriends: !friendRequests.friendsOfFriends };
+                              setFriendRequests(updated);
+                              console.log('[Auto-save] Friend Request Preference:', updated);
+                            }}
+                            className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                              friendRequests.friendsOfFriends ? 'bg-[#5865F2] border-[#5865F2]' : 'border-gray-500 bg-transparent'
+                            }`}
+                          >
+                            {friendRequests.friendsOfFriends && <Check size={16} className="text-white" />}
+                          </div>
+                        </div>
+
+                        {/* Server Members Row */}
+                        <div className="flex items-center justify-between p-4 last:border-0">
+                          <span className="text-gray-200 font-medium text-sm">Server Members</span>
+                          <div
+                            onClick={() => {
+                              const updated = { ...friendRequests, serverMembers: !friendRequests.serverMembers };
+                              setFriendRequests(updated);
+                              console.log('[Auto-save] Friend Request Preference:', updated);
+                            }}
+                            className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-colors ${
+                              friendRequests.serverMembers ? 'bg-[#5865F2] border-[#5865F2]' : 'border-gray-500 bg-transparent'
+                            }`}
+                          >
+                            {friendRequests.serverMembers && <Check size={16} className="text-white" />}
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                  </div>
+                ) : settingsTab === 'appearance' ? (
+                  // Appearance Settings View
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-6">Appearance</h2>
+                    
+                    {/* Section 1: Theme */}
+                    <div id="appearance-theme" className="mb-6">
+                      <h3 className="text-lg font-bold text-white mb-4">Theme</h3>
+                      <span className="block text-xs font-bold text-gray-400 uppercase mb-2">Default Themes</span>
+                      
+                      <div className="flex gap-4">
+                        {/* Light Mode Button */}
+                        <div
+                          onClick={() => setSelectedTheme('light')}
+                          className={`w-20 h-20 rounded-xl cursor-pointer border-2 transition-all flex flex-col items-center justify-center gap-2 relative ${
+                            selectedTheme === 'light'
+                              ? 'border-[#5865F2] bg-white text-black'
+                              : 'border-transparent bg-white text-black hover:opacity-90'
+                          }`}
+                        >
+                          <span className="text-xs font-bold">Light</span>
+                          {selectedTheme === 'light' && (
+                            <div className="absolute top-1.5 right-1.5 bg-[#5865F2] text-white rounded-full p-0.5 flex items-center justify-center">
+                              <Check size={8} strokeWidth={4} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dark Mode Button */}
+                        <div
+                          onClick={() => setSelectedTheme('dark')}
+                          className={`w-20 h-20 rounded-xl cursor-pointer border-2 transition-all flex flex-col items-center justify-center gap-2 relative ${
+                            selectedTheme === 'dark'
+                              ? 'border-[#5865F2] bg-[#313338] text-white'
+                              : 'border-transparent bg-[#313338] text-white hover:bg-[#35373C]'
+                          }`}
+                        >
+                          <span className="text-xs font-bold">Dark</span>
+                          {selectedTheme === 'dark' && (
+                            <div className="absolute top-1.5 right-1.5 bg-[#5865F2] text-white rounded-full p-0.5 flex items-center justify-center">
+                              <Check size={8} strokeWidth={4} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sync Button */}
+                        <div
+                          onClick={() => setSelectedTheme('sync')}
+                          className={`w-20 h-20 rounded-xl cursor-pointer border-2 transition-all flex flex-col items-center justify-center gap-2 relative ${
+                            selectedTheme === 'sync'
+                              ? 'border-[#5865F2] bg-gray-800 text-white'
+                              : 'border-transparent bg-gray-800 text-white hover:bg-gray-700'
+                          }`}
+                        >
+                          <RefreshCw size={18} className="text-gray-300" />
+                          <span className="text-xs font-bold">Sync</span>
+                          {selectedTheme === 'sync' && (
+                            <div className="absolute top-1.5 right-1.5 bg-[#5865F2] text-white rounded-full p-0.5 flex items-center justify-center">
+                              <Check size={8} strokeWidth={4} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Messages */}
+                    <div id="appearance-messages">
+                      <h3 className="text-lg font-bold text-white mt-10 mb-4">Messages</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Show images, videos, and lolcats...
+                          </span>
+                          <div
+                            onClick={() => setShowMedia(!showMedia)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              showMedia ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                showMedia ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Show embeds and link previews
+                          </span>
+                          <div
+                            onClick={() => setShowEmbeds(!showEmbeds)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              showEmbeds ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                showEmbeds ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 3 */}
+                        <div className="flex items-center justify-between py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Show emoji reactions on messages
+                          </span>
+                          <div
+                            onClick={() => setShowReactions(!showReactions)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              showReactions ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                showReactions ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 3: Chat Box */}
+                    <div id="appearance-chatbox">
+                      <h3 className="text-lg font-bold text-white mt-10 mb-4">Chat Box</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Preview emoji, mentions, and markdown syntax as you type
+                          </span>
+                          <div
+                            onClick={() => setPreviewMarkdown(!previewMarkdown)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              previewMarkdown ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                previewMarkdown ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Show send message button
+                          </span>
+                          <div
+                            onClick={() => setShowSendBtn(!showSendBtn)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              showSendBtn ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                showSendBtn ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 4: Advanced */}
+                    <div id="appearance-advanced">
+                      <h3 className="text-lg font-bold text-white mt-10 mb-4">Advanced</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-white font-semibold text-sm">Developer Mode</span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              Exposes context menu items helpful for writing bots using the Discord API.
+                            </span>
+                          </div>
+                          <div
+                            onClick={() => setDevMode(!devMode)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              devMode ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                devMode ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between py-4">
+                          <span className="text-gray-200 font-medium text-sm">
+                            Enable Hardware Acceleration
+                          </span>
+                          <div
+                            onClick={() => setHardwareAccel(!hardwareAccel)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              hardwareAccel ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                hardwareAccel ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                  </div>
+                ) : settingsTab === 'voice' ? (
+                  // Voice & Video Settings View
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-6">Voice & Video</h2>
+
+                    {/* Section 1: Voice Settings */}
+                    <div id="voice-settings" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Voice Settings</h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-5 space-y-6">
+                        
+                        {/* Device Selection Row */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Microphone</label>
+                            <select
+                              value={selectedMic}
+                              onChange={(e) => setSelectedMic(e.target.value)}
+                              className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                            >
+                              <option value="Default - MacBook Pro Microphone">Default - MacBook Pro Microphone</option>
+                              <option value="External USB Microphone">External USB Microphone</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Speaker</label>
+                            <select
+                              value={selectedSpeaker}
+                              onChange={(e) => setSelectedSpeaker(e.target.value)}
+                              className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                            >
+                              <option value="Default - MacBook Pro Speakers">Default - MacBook Pro Speakers</option>
+                              <option value="External USB Speakers">External USB Speakers</option>
+                              <option value="Headphones">Headphones</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Volume Sliders Row */}
+                        <div className="grid grid-cols-2 gap-4 mt-6">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Microphone Volume</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={micVolume}
+                              onChange={(e) => setMicVolume(Number(e.target.value))}
+                              className="w-full accent-[#5865F2] mt-2 cursor-pointer"
+                            />
+                            <div className="text-[10px] text-gray-400 text-right mt-1">{micVolume}%</div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">Speaker Volume</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={speakerVolume}
+                              onChange={(e) => setSpeakerVolume(Number(e.target.value))}
+                              className="w-full accent-[#5865F2] mt-2 cursor-pointer"
+                            />
+                            <div className="text-[10px] text-gray-400 text-right mt-1">{speakerVolume}%</div>
+                          </div>
+                        </div>
+
+                        {/* Mic Test Row */}
+                        <div className="mt-6 flex items-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => setIsTestingMic(!isTestingMic)}
+                            className={`text-white px-6 py-2 rounded font-medium text-sm transition ${
+                              isTestingMic ? 'bg-red-500 hover:bg-red-600' : 'bg-[#5865F2] hover:bg-[#4752C4]'
+                            }`}
+                          >
+                            {isTestingMic ? 'Stop Test' : 'Mic Test'}
+                          </button>
+                          <div className="flex-1 h-3 bg-[#1E1F22] rounded-full overflow-hidden relative">
+                            <div
+                              className={`h-full bg-[#248046] transition-all duration-300 ${
+                                isTestingMic ? 'w-2/3 animate-pulse' : 'w-1/3'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Input Mode Row */}
+                        <div className="mt-8">
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Input Mode</label>
+                          <div className="flex gap-4">
+                            {/* Voice Activity Radio */}
+                            <div
+                              onClick={() => setInputMode('activity')}
+                              className={`flex-1 flex items-center justify-between p-4 rounded-lg bg-[#1E1F22] border cursor-pointer transition ${
+                                inputMode === 'activity' ? 'border-[#5865F2]' : 'border-transparent hover:bg-[#2B2D31]/40'
+                              }`}
+                            >
+                              <span className="text-sm font-medium text-gray-200">Voice Activity</span>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                inputMode === 'activity' ? 'border-[#5865F2]' : 'border-gray-500'
+                              }`}>
+                                {inputMode === 'activity' && <div className="w-2.5 h-2.5 rounded-full bg-[#5865F2]" />}
+                              </div>
+                            </div>
+
+                            {/* Push to Talk Radio */}
+                            <div
+                              onClick={() => setInputMode('push')}
+                              className={`flex-1 flex items-center justify-between p-4 rounded-lg bg-[#1E1F22] border cursor-pointer transition ${
+                                inputMode === 'push' ? 'border-[#5865F2]' : 'border-transparent hover:bg-[#2B2D31]/40'
+                              }`}
+                            >
+                              <span className="text-sm font-medium text-gray-200">Push to Talk</span>
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                inputMode === 'push' ? 'border-[#5865F2]' : 'border-gray-500'
+                              }`}>
+                                {inputMode === 'push' && <div className="w-2.5 h-2.5 rounded-full bg-[#5865F2]" />}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 2: Camera */}
+                    <div id="video-settings" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Camera</h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-5">
+                        
+                        {/* Video Preview Box */}
+                        <div className="w-full h-64 bg-black rounded-lg flex items-center justify-center mb-4 border border-[#1E1F22] relative overflow-hidden">
+                          {isTestingVideo ? (
+                            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-950 via-slate-900 to-emerald-950 flex flex-col items-center justify-center animate-fade-in">
+                              <div className="w-16 h-16 rounded-full bg-[#5865F2]/20 flex items-center justify-center text-[#5865F2] mb-3 animate-pulse">
+                                <Camera size={32} />
+                              </div>
+                              <span className="text-sm font-semibold text-gray-200">Camera preview active...</span>
+                              <button
+                                type="button"
+                                onClick={() => setIsTestingVideo(false)}
+                                className="mt-4 bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-4 py-2 rounded transition"
+                              >
+                                Stop Test
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center">
+                              <Camera size={48} className="text-gray-600 mb-4" />
+                              <button
+                                type="button"
+                                onClick={() => setIsTestingVideo(true)}
+                                className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-2 rounded font-medium text-sm transition"
+                              >
+                                Test Video
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Camera Selection */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Camera</label>
+                          <select
+                            value={selectedCamera}
+                            onChange={(e) => setSelectedCamera(e.target.value)}
+                            className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                          >
+                            <option value="FaceTime HD Camera">FaceTime HD Camera</option>
+                            <option value="External USB Camera">External USB Camera</option>
+                          </select>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 3: Advanced */}
+                    <div id="advanced-voice" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Advanced</h3>
+                      <div className="bg-[#2B2D31] rounded-xl p-5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-gray-200 font-semibold text-sm">Reset Voice Settings</span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              This will clear all custom input, output, and volume settings.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMicVolume(80);
+                              setSpeakerVolume(80);
+                              setInputMode('activity');
+                              setIsTestingMic(false);
+                              setIsTestingVideo(false);
+                              setSelectedMic('Default - MacBook Pro Microphone');
+                              setSelectedSpeaker('Default - MacBook Pro Speakers');
+                              setSelectedCamera('FaceTime HD Camera');
+                              alert('Voice settings have been reset!');
+                            }}
+                            className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded text-xs transition"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ) : settingsTab === 'notifications' ? (
+                  // Notifications Settings View
+                  <div>
+                    <h2 className="text-xl font-bold text-white mb-6">Notifications</h2>
+
+                    {/* Section 1: Overview */}
+                    <div id="notif-overview" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Overview</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-white font-medium text-sm">Enable Desktop Notifications</span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              If you're looking for per-channel notifications...
+                            </span>
+                          </div>
+                          <div
+                            onClick={() => setDesktopNotifs(!desktopNotifs)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              desktopNotifs ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                desktopNotifs ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between py-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-white font-medium text-sm">Enable Unread Message Badge</span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              Shows a red badge on the app icon.
+                            </span>
+                          </div>
+                          <div
+                            onClick={() => setUnreadBadge(!unreadBadge)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              unreadBadge ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                unreadBadge ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 2: Sounds */}
+                    <div id="notif-sounds" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Sounds</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <span className="text-gray-200 font-medium text-sm">New Message</span>
+                          <div
+                            onClick={() => setSoundNewMsg(!soundNewMsg)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              soundNewMsg ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                soundNewMsg ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <span className="text-gray-200 font-medium text-sm">Incoming Ring</span>
+                          <div
+                            onClick={() => setSoundIncomingRing(!soundIncomingRing)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              soundIncomingRing ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                soundIncomingRing ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 3 */}
+                        <div className="flex items-center justify-between py-4">
+                          <span className="text-gray-200 font-medium text-sm">Disable All Notification Sounds</span>
+                          <div
+                            onClick={() => setDisableAllSounds(!disableAllSounds)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              disableAllSounds ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                disableAllSounds ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 3: Email */}
+                    <div id="notif-email" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Email</h3>
+                      <div className="bg-[#2B2D31] rounded-xl px-5 py-1 flex flex-col">
+                        
+                        {/* Row 1 */}
+                        <div className="flex items-center justify-between border-b border-[#1E1F22] py-4">
+                          <div className="flex flex-col min-w-0 pr-4">
+                            <span className="text-gray-200 font-medium text-sm">Communication Emails</span>
+                            <span className="text-xs text-gray-400 mt-1 leading-normal">
+                              Receive emails for missed calls and messages.
+                            </span>
+                          </div>
+                          <div
+                            onClick={() => setCommunicationEmails(!communicationEmails)}
+                            className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                              communicationEmails ? 'bg-[#248046]' : 'bg-gray-600'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                communicationEmails ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex items-center justify-between py-4">
+                          <span className="text-gray-200 font-medium text-sm">Unsubscribe from all marketing emails</span>
+                          <button
+                            type="button"
+                            onClick={() => alert('Successfully unsubscribed from all marketing emails!')}
+                            className="text-red-400 bg-transparent border border-red-400 hover:bg-red-400/10 px-4 py-1.5 rounded transition text-xs font-semibold"
+                          >
+                            Unsubscribe
+                          </button>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Section 4: Advanced */}
+                    <div id="notif-advanced" className="mb-10">
+                      <h3 className="text-lg font-bold text-white mb-4">Advanced</h3>
+                      <div
+                        onClick={() => setShowAdvancedNotif(!showAdvancedNotif)}
+                        className="flex items-center justify-between cursor-pointer group bg-[#2B2D31] rounded-lg p-4 border border-transparent hover:border-gray-700 transition"
+                      >
+                        <span className="font-medium text-gray-200 text-sm">
+                          {showAdvancedNotif ? 'Hide Advanced Notification Settings' : 'Show Advanced Notification Settings'}
+                        </span>
+                        <div className="w-8 h-8 rounded-full bg-[#1E1F22] flex items-center justify-center group-hover:bg-[#35373C] transition">
+                          {showAdvancedNotif ? <ChevronUp size={16} className="text-gray-300" /> : <ChevronDown size={16} className="text-gray-300" />}
+                        </div>
+                      </div>
+
+                      {showAdvancedNotif && (
+                        <div className="mt-4 p-4 bg-[#2B2D31] rounded-lg space-y-4 animate-fade-in">
+                          {/* Content Row 1 */}
+                          <div className="flex items-center justify-between py-2 border-b border-[#1E1F22] pb-4">
+                            <div className="flex flex-col min-w-0 pr-4">
+                              <span className="text-gray-200 font-medium text-sm">Allow playback and usage of /tts command</span>
+                              <span className="text-xs text-gray-400 mt-1 leading-normal">
+                                Text-to-speech messages can be read aloud.
+                              </span>
+                            </div>
+                            <div
+                              onClick={() => setTtsAllowed(!ttsAllowed)}
+                              className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors duration-200 ease-in-out flex-shrink-0 ${
+                                ttsAllowed ? 'bg-[#248046]' : 'bg-gray-600'
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform duration-200 ease-in-out ${
+                                  ttsAllowed ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Content Row 2 */}
+                          <div className="flex items-center justify-between py-2">
+                            <span className="text-gray-200 font-medium text-sm">Speak all messages out loud</span>
+                            <select
+                              value={ttsSpeakMode}
+                              onChange={(e) => setTtsSpeakMode(e.target.value)}
+                              className="bg-[#1E1F22] text-gray-200 p-2.5 rounded outline-none border border-transparent focus:border-[#5865F2] transition text-xs font-semibold w-56"
+                            >
+                              <option value="never">Never</option>
+                              <option value="all">For all channels</option>
+                              <option value="selected">Only for currently selected channel</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
                 ) : (
                   // Other Tab Placeholder Views
                   <div className="py-10">
                     <h2 className="text-xl font-bold text-white mb-2 uppercase tracking-wide">
-                      {settingsTab === 'profiles' ? 'Profiles' : settingsTab === 'privacy' ? 'Privacy & Safety' : settingsTab.toUpperCase()}
+                      {settingsTab === 'profiles' ? 'Profiles' : settingsTab.toUpperCase()}
                     </h2>
                     <p className="text-gray-400 text-sm">This settings view is a UI placeholder matching Discord's setup.</p>
                   </div>
@@ -2211,11 +3679,21 @@ export default function MainAppPage() {
                 <span className="text-sm font-medium text-white">Careful — you have unsaved changes!</span>
                 <div className="flex items-center gap-3">
                   <button
+                    type="button"
                     onClick={() => {
                       setDisplayName(initialSettingsRef.current.displayName);
                       setPronouns(initialSettingsRef.current.pronouns);
                       setAboutMe(initialSettingsRef.current.aboutMe);
                       setBannerColor(initialSettingsRef.current.bannerColor);
+                      
+                      // Restore server profiles map
+                      setServerProfiles(JSON.parse(JSON.stringify(initialServerProfilesRef.current)));
+                      // Restore active server profile inputs
+                      const activeProfile = initialServerProfilesRef.current[selectedServerId] || { nickname: '', avatar: '', aboutMe: '' };
+                      setServerNickname(activeProfile.nickname);
+                      setServerAvatar(activeProfile.avatar);
+                      setServerAboutMe(activeProfile.aboutMe);
+                      
                       setIsDirty(false);
                     }}
                     className="text-white hover:underline text-sm px-4 py-2 focus:outline-none"
@@ -2223,12 +3701,15 @@ export default function MainAppPage() {
                     Reset
                   </button>
                   <button
-                    onClick={() => {
+                    type="button"
+                    onClick={async () => {
+                      const finalServerProfiles = getCurrentServerProfiles();
                       console.log("Saving changes:", {
                         displayName,
                         pronouns,
                         aboutMe,
-                        bannerColor
+                        bannerColor,
+                        serverProfiles: finalServerProfiles
                       });
                       initialSettingsRef.current = {
                         displayName,
@@ -2236,6 +3717,22 @@ export default function MainAppPage() {
                         aboutMe,
                         bannerColor
                       };
+                      
+                      // Save server profile to backend if in server tab and a server is selected
+                      if (profileTab === 'server' && selectedServerId) {
+                        try {
+                          await api.put(`/api/servers/${selectedServerId}/members/me`, {
+                            nickname: serverNickname,
+                            avatar: serverAvatar,
+                            aboutMe: serverAboutMe
+                          });
+                        } catch (error) {
+                          console.error('[MainAppPage] Failed to save server profile:', error);
+                        }
+                      }
+                      
+                      initialServerProfilesRef.current = JSON.parse(JSON.stringify(finalServerProfiles));
+                      setServerProfiles(finalServerProfiles);
                       setIsDirty(false);
                     }}
                     className="bg-[#248046] hover:bg-[#1A6334] text-white rounded px-4 py-2 text-sm font-medium transition-colors focus:outline-none"
@@ -2248,6 +3745,230 @@ export default function MainAppPage() {
 
           </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 9. SET STATUS MODAL */}
+      {isStatusModalOpen && (
+        <div
+          className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center"
+          onClick={() => setIsStatusModalOpen(false)}
+        >
+          <div
+            className="w-[440px] bg-[#313338] rounded-xl shadow-2xl flex flex-col overflow-visible animate-fade-in relative animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setIsStatusModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="p-4 pb-0">
+              <h2 className="text-lg font-bold text-white">Set your status</h2>
+            </div>
+
+            {/* Mini Preview Area */}
+            <div className="p-4 flex justify-center bg-[#1E1F22] mt-4 border-y border-gray-800">
+              <div className="bg-[#232428] w-64 rounded-lg overflow-hidden border border-gray-800 relative text-left">
+                {/* Mini Banner */}
+                <div className="h-16 w-full" style={{ backgroundColor: bannerColor }} />
+                
+                {/* Mini Avatar Box */}
+                <div className="w-[50px] h-[50px] rounded-full absolute top-[40px] left-[12px] border-[3px] border-[#232428] bg-[#2B2D31]">
+                  <img
+                    src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${avatarSeed || user?.username || 'You'}`}
+                    alt="Avatar"
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                  {/* Mini Online Status dot */}
+                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#232428] flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-[#23A55A]" />
+                  </div>
+                  
+                  {/* Mini Status Bubble */}
+                  <div className="absolute top-[32px] left-[46px] z-20">
+                    {!tempStatusText ? (
+                      /* Empty State */
+                      <div className="bg-[#111214] border-2 border-[#232428] rounded-full px-1.5 py-0.5 flex items-center justify-center text-[8px] font-bold text-gray-300 whitespace-nowrap relative">
+                        {/* Mini Tail Border */}
+                        <div className="absolute left-[-5px] top-[4px] w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-r-[4px] border-r-[#232428] z-0" />
+                        {/* Mini Tail Fill */}
+                        <div className="absolute left-[-3px] top-[5px] w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-r-[3px] border-r-[#111214] z-10" />
+                        
+                        <span className="z-10">+ Status</span>
+                      </div>
+                    ) : (
+                      /* Filled State */
+                      <div className="bg-[#111214] border-2 border-[#232428] rounded-xl px-1.5 py-0.5 flex items-start gap-1 w-max max-w-[90px] min-w-[50px] relative">
+                        {/* Mini Tail Border */}
+                        <div className="absolute left-[-5px] top-[6px] w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-r-[4px] border-r-[#232428] z-0" />
+                        {/* Mini Tail Fill */}
+                        <div className="absolute left-[-3px] top-[7px] w-0 h-0 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent border-r-[3px] border-r-[#111214] z-10" />
+                        
+                        {tempStatusEmoji && <span className="text-[10px] flex-shrink-0 mt-0.5 z-10">{tempStatusEmoji}</span>}
+                        <span className="text-[9px] text-white truncate block max-w-[60px] z-10">
+                          {tempStatusText}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Mini Card Body */}
+                <div className="bg-[#111214] m-2 mt-8 p-2 rounded text-xs">
+                  <div className="font-bold text-white truncate">
+                    {displayName.trim() || user?.username || 'YUTO'}
+                  </div>
+                  <div className="text-[10px] text-gray-400">
+                    @{user?.username?.toLowerCase() || 'chucaom'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Section */}
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Status</label>
+                <div className="relative bg-[#1E1F22] rounded flex items-center p-2 focus-within:ring-1 focus-within:ring-blue-500 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="text-gray-400 hover:text-white transition text-lg flex items-center justify-center"
+                  >
+                    {tempStatusEmoji ? tempStatusEmoji : <Smile size={20} />}
+                  </button>
+                  
+                  <input
+                    type="text"
+                    placeholder="What's cooking?"
+                    value={tempStatusText}
+                    onChange={(e) => setTempStatusText(e.target.value)}
+                    className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-grow"
+                  />
+
+                  {tempStatusText && (
+                    <button
+                      type="button"
+                      onClick={() => setTempStatusText('')}
+                      className="text-gray-400 hover:text-white transition"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+
+                  {/* Mock Emoji Picker Popover */}
+                  {showEmojiPicker && (
+                    <div className="absolute top-10 left-0 z-50 bg-[#111214] border border-gray-800 rounded-md p-2 grid grid-cols-4 gap-2 shadow-xl w-48 animate-fade-in">
+                      {['😊', '🐱', '🎮', '🚀', '🎉', '🔥', '💻', '🍕', '❤️', '🤔', '👍', '✨'].map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            setTempStatusEmoji(emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center hover:bg-[#35373C] rounded text-lg transition"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Dropdown Section */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Clear after</label>
+                <select
+                  value={tempClearAfter}
+                  onChange={(e) => setTempClearAfter(e.target.value)}
+                  className="bg-[#1E1F22] text-white w-full p-2.5 rounded outline-none border border-transparent focus:border-[#5865F2] transition text-sm font-semibold"
+                >
+                  <option value="dont_clear">Don't clear</option>
+                  <option value="24_hours">24 hours</option>
+                  <option value="4_hours">4 hours</option>
+                  <option value="1_hour">1 hour</option>
+                  <option value="30_minutes">30 minutes</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-[#2B2D31] p-4 flex justify-end items-center rounded-b-xl border-t border-gray-950/40">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusText(tempStatusText);
+                  setStatusEmoji(tempStatusEmoji);
+                  setClearAfter(tempClearAfter);
+                  setIsStatusModalOpen(false);
+                }}
+                className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-2 rounded font-medium text-sm transition"
+              >
+                Save
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 9. PASSWORD CONFIRMATION MODAL */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70">
+          <div className="w-[400px] bg-[#313338] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-gray-800 animate-fade-in">
+            {/* Header */}
+            <div className="p-6 pb-4">
+              <h2 className="text-lg font-bold text-white mb-2">Enter Password</h2>
+              <p className="text-xs text-gray-400">
+                Please enter your password to reveal your email address.
+              </p>
+            </div>
+            
+            {/* Body */}
+            <form onSubmit={handleVerifyPassword} className="px-6 pb-6 flex flex-col gap-3">
+              <input
+                type="password"
+                required
+                autoFocus
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Password"
+                className="bg-[#1E1F22] text-white w-full p-2.5 rounded border border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#5865F2] text-sm"
+              />
+              {passwordError && (
+                <span className="text-red-500 text-xs font-semibold">{passwordError}</span>
+              )}
+              
+              {/* Footer */}
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setConfirmPassword('');
+                    setPasswordError('');
+                  }}
+                  className="text-white hover:underline text-sm px-4 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifying}
+                  className="bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-bold py-2 px-6 rounded text-sm transition shadow-md"
+                >
+                  {isVerifying ? 'Verifying...' : 'Confirm'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
