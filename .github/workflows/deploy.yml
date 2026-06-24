@@ -197,6 +197,9 @@ jobs:
         run: |
           terraform plan \
             -input=false \
+            -var="environment=staging" \
+            -var="github_org=truongnhoxcon" \
+            -var="github_repo=Real-time-Streaming-Collaboration" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
             -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
             -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_FRONTEND }}:${{ needs.build-and-push.outputs.image_tag }}" \
