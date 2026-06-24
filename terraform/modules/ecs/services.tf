@@ -7,11 +7,11 @@
 # ─── core-backend ECS service ────────────────────────────────────────────────
 
 resource "aws_ecs_service" "core_backend" {
-  name             = "${var.project_name}-core-backend-service"
-  cluster          = aws_ecs_cluster.main.id
-  task_definition  = aws_ecs_task_definition.core_backend.arn
-  desired_count    = 2
-  launch_type      = "FARGATE"
+  name            = "${var.project_name}-core-backend-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.core_backend.arn
+  desired_count   = 2
+  launch_type     = "FARGATE"
 
   network_configuration {
     subnets          = var.private_subnet_ids
@@ -49,11 +49,11 @@ resource "aws_ecs_service" "core_backend" {
 # ─── realtime-backend ECS service ────────────────────────────────────────────
 
 resource "aws_ecs_service" "realtime_backend" {
-  name             = "${var.project_name}-realtime-backend-service"
-  cluster          = aws_ecs_cluster.main.id
-  task_definition  = aws_ecs_task_definition.realtime_backend.arn
-  desired_count    = 2
-  launch_type      = "FARGATE"
+  name            = "${var.project_name}-realtime-backend-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.realtime_backend.arn
+  desired_count   = 2
+  launch_type     = "FARGATE"
 
   network_configuration {
     subnets          = var.private_subnet_ids

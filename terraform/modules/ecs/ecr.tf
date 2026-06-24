@@ -23,10 +23,10 @@ locals {
         rulePriority = 2
         description  = "Keep only 30 most recent tagged images"
         selection = {
-          tagStatus      = "tagged"
-          tagPrefixList  = ["v", "latest", "sha-"]
-          countType      = "imageCountMoreThan"
-          countNumber    = 30
+          tagStatus     = "tagged"
+          tagPrefixList = ["v", "latest", "sha-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 30
         }
         action = {
           type = "expire"

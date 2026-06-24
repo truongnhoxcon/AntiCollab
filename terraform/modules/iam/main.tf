@@ -201,9 +201,9 @@ resource "aws_iam_policy" "secrets_task" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "SecretsManagerGetTwilio"
-        Effect = "Allow"
-        Action = ["secretsmanager:GetSecretValue"]
+        Sid      = "SecretsManagerGetTwilio"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
         Resource = [var.twilio_secret_arn]
       }
     ]
@@ -224,8 +224,8 @@ resource "aws_iam_role_policy_attachment" "secrets_task" {
 resource "aws_iam_openid_connect_provider" "github_actions" {
   count = var.create_github_actions_role ? 1 : 0
 
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
   # Thumbprint list for token.actions.githubusercontent.com
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 
@@ -279,9 +279,9 @@ resource "aws_iam_policy" "github_actions_ci" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECRAuth"
-        Effect = "Allow"
-        Action = ["ecr:GetAuthorizationToken"]
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
         Resource = ["*"]
       },
       {

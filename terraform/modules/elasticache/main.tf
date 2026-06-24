@@ -80,9 +80,9 @@ resource "aws_elasticache_replication_group" "main" {
 
   # ── Security ──────────────────────────────────────────────────────────────
 
-  transit_encryption_enabled  = true                    # Requirement 4.6: TLS in-transit
-  at_rest_encryption_enabled  = true                    # Requirement 4.5: encryption at-rest
-  auth_token = "AntiGroupRedisSecretKey2026"            # Requirement 4.7: token from Secrets Manager
+  transit_encryption_enabled = true                          # Requirement 4.6: TLS in-transit
+  at_rest_encryption_enabled = true                          # Requirement 4.5: encryption at-rest
+  auth_token                 = "AntiGroupRedisSecretKey2026" # Requirement 4.7: token from Secrets Manager
 
   # ── Networking ────────────────────────────────────────────────────────────
 
@@ -91,9 +91,9 @@ resource "aws_elasticache_replication_group" "main" {
 
   # ── Backup and Maintenance ────────────────────────────────────────────────
 
-  snapshot_retention_limit = 1                       # Keep daily snapshots for 1 day
-  snapshot_window          = "03:00-04:00"           # Daily backup window (UTC)
-  maintenance_window       = "sun:04:00-sun:05:00"   # Weekly maintenance window (UTC)
+  snapshot_retention_limit = 1                     # Keep daily snapshots for 1 day
+  snapshot_window          = "03:00-04:00"         # Daily backup window (UTC)
+  maintenance_window       = "sun:04:00-sun:05:00" # Weekly maintenance window (UTC)
 
   # ── Upgrade ───────────────────────────────────────────────────────────────
 

@@ -363,9 +363,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 12
         height = 6
         properties = {
-          title  = "ECS CPU Utilization"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "ECS CPU Utilization"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.core_backend.name, { label = "core-backend CPU" }],
@@ -381,9 +381,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 12
         height = 6
         properties = {
-          title  = "ECS Memory Utilization"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "ECS Memory Utilization"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.main.name, "ServiceName", aws_ecs_service.core_backend.name, { label = "core-backend Memory" }],
@@ -400,9 +400,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "ALB Request Count"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "ALB Request Count"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", var.alb_arn_suffix, { stat = "Sum", label = "Request Count" }]
@@ -416,9 +416,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "ALB 5XX Error Count"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "ALB 5XX Error Count"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "LoadBalancer", var.alb_arn_suffix, { stat = "Sum", label = "5XX Errors" }]
@@ -432,9 +432,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "ALB Target Response Time (p95)"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "ALB Target Response Time (p95)"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix, { stat = "p95", label = "p95 Latency" }]
@@ -449,9 +449,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "RDS CPU Utilization"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "RDS CPU Utilization"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", var.rds_instance_id, { label = "RDS CPU" }]
@@ -466,9 +466,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "RDS Database Connections"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "RDS Database Connections"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", var.rds_instance_id, { label = "DB Connections" }]
@@ -482,9 +482,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 8
         height = 6
         properties = {
-          title  = "RDS Free Storage Space"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "RDS Free Storage Space"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", var.rds_instance_id, { label = "Free Storage (bytes)" }]
@@ -499,9 +499,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 6
         height = 6
         properties = {
-          title  = "Redis Current Connections"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "Redis Current Connections"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ElastiCache", "CurrConnections", "ReplicationGroupId", var.redis_replication_group_id, { label = "Connections" }]
@@ -515,9 +515,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 6
         height = 6
         properties = {
-          title  = "Redis Memory Usage %"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "Redis Memory Usage %"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "ReplicationGroupId", var.redis_replication_group_id, { label = "Memory %" }]
@@ -532,9 +532,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 6
         height = 6
         properties = {
-          title  = "Redis Cache Hits"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "Redis Cache Hits"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ElastiCache", "CacheHits", "ReplicationGroupId", var.redis_replication_group_id, { stat = "Sum", label = "Cache Hits" }]
@@ -548,9 +548,9 @@ resource "aws_cloudwatch_dashboard" "overview" {
         width  = 6
         height = 6
         properties = {
-          title  = "Redis Cache Misses"
-          region = var.aws_region
-          view   = "timeSeries"
+          title   = "Redis Cache Misses"
+          region  = var.aws_region
+          view    = "timeSeries"
           stacked = false
           metrics = [
             ["AWS/ElastiCache", "CacheMisses", "ReplicationGroupId", var.redis_replication_group_id, { stat = "Sum", label = "Cache Misses" }]

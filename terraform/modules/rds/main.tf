@@ -161,7 +161,7 @@ resource "aws_db_instance" "main" {
 
   # ── Backup and Recovery ───────────────────────────────────────────────────
 
-  backup_retention_period = 7         # Requirements 5.2, 5.3, 14.1, 14.2
+  backup_retention_period = 7 # Requirements 5.2, 5.3, 14.1, 14.2
   backup_window           = "03:00-04:00"
   maintenance_window      = "Sun:04:00-Sun:05:00"
 
@@ -177,8 +177,8 @@ resource "aws_db_instance" "main" {
   # ── Monitoring ────────────────────────────────────────────────────────────
 
   # Enhanced Monitoring at 60-second granularity
-  monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring.arn
+  monitoring_interval = 60
+  monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
 
   # Performance Insights (7-day free retention)
   performance_insights_enabled          = true
