@@ -157,7 +157,11 @@ resource "aws_lb_target_group" "realtime_backend" {
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
-    matcher             = "200"
+    # Socket.io does not expose a /health route, so it returns 404 or 400 on
+    # plain HTTP GET requests.  Accepting 200/404/400 means any response from
+    # the container on port 4000 is treated as healthy — the node process is
+    # up and accepting TCP connections, which is all the ALB needs to confirm.
+    matcher             = "200,404,400"
   }
 
   stickiness {
