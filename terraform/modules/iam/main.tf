@@ -333,6 +333,20 @@ resource "aws_iam_role_policy_attachment" "github_actions_ci" {
   policy_arn = aws_iam_policy.github_actions_ci[0].arn
 }
 
+# AdministratorAccess – grants the CI role full AWS permissions so that
+# `terraform plan` and `terraform apply` can read and manage every resource
+# type in the stack (EC2, VPC, RDS, ElastiCache, ECS, IAM, S3, CloudWatch,
+# Secrets Manager, etc.) without hitting per-service AccessDenied errors.
+#
+# NOTE: scope this down to a least-privilege policy once the infrastructure
+# is stable and the full set of required actions is known.
+resource "aws_iam_role_policy_attachment" "github_actions_admin" {
+  count = var.create_github_actions_role ? 1 : 0
+
+  role       = aws_iam_role.github_actions[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GitHub Actions – Terraform remote backend access
 #
