@@ -14,6 +14,11 @@ output "realtime_backend_ecr_repository_url" {
   value       = aws_ecr_repository.realtime_backend.repository_url
 }
 
+output "frontend_ecr_repository_url" {
+  description = "ECR repository URL for frontend. Used in ECS task definitions and GitHub Actions."
+  value       = aws_ecr_repository.frontend.repository_url
+}
+
 output "core_backend_ecr_repository_arn" {
   description = "ECR repository ARN for core-backend. Used in IAM policies."
   value       = aws_ecr_repository.core_backend.arn
@@ -22,6 +27,11 @@ output "core_backend_ecr_repository_arn" {
 output "realtime_backend_ecr_repository_arn" {
   description = "ECR repository ARN for realtime-backend. Used in IAM policies."
   value       = aws_ecr_repository.realtime_backend.arn
+}
+
+output "frontend_ecr_repository_arn" {
+  description = "ECR repository ARN for frontend. Used in IAM policies."
+  value       = aws_ecr_repository.frontend.arn
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

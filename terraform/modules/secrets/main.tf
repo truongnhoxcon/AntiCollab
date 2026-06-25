@@ -36,6 +36,10 @@ resource "aws_secretsmanager_secret" "db_password" {
     Name    = "${local.name_prefix}/db-password"
     Purpose = "database-credentials"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
@@ -69,6 +73,10 @@ resource "aws_secretsmanager_secret" "jwt_secret" {
     Name    = "${local.name_prefix}/jwt-secret"
     Purpose = "jwt-signing"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "jwt_secret" {
@@ -98,6 +106,10 @@ resource "aws_secretsmanager_secret" "twilio_credentials" {
     Name    = "${local.name_prefix}/twilio/api-credentials"
     Purpose = "twilio-stun-turn"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "twilio_credentials" {
@@ -147,6 +159,10 @@ resource "aws_secretsmanager_secret" "redis_auth_token" {
     Name    = "${local.name_prefix}/redis-auth-token"
     Purpose = "redis-auth"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "redis_auth_token" {
@@ -178,6 +194,10 @@ resource "aws_secretsmanager_secret" "google_oauth" {
     Name    = "${local.name_prefix}/google-oauth"
     Purpose = "google-oauth"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "google_oauth" {

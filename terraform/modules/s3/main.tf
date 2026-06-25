@@ -57,6 +57,10 @@ resource "aws_s3_bucket" "access_logs" {
     Name    = local.access_logs_bucket_name
     Purpose = "S3 server access logs"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_s3_bucket_versioning" "access_logs" {
@@ -100,6 +104,10 @@ resource "aws_s3_bucket" "alb_logs" {
     Name    = local.alb_logs_bucket_name
     Purpose = "ALB access logs"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_s3_bucket_versioning" "alb_logs" {
@@ -188,6 +196,10 @@ resource "aws_s3_bucket" "files" {
     Name    = local.files_bucket_name
     Purpose = "Application file storage"
   })
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # ── Versioning ────────────────────────────────────────────────────────────────

@@ -79,3 +79,25 @@ resource "aws_ecr_lifecycle_policy" "realtime_backend" {
   repository = aws_ecr_repository.realtime_backend.name
   policy     = local.ecr_lifecycle_policy
 }
+
+# ─── frontend ECR repository ──────────────────────────────────────────────────
+
+resource "aws_ecr_repository" "frontend" {
+  name                 = "frontend"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name        = "frontend"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "frontend" {
+  repository = aws_ecr_repository.frontend.name
+  policy     = local.ecr_lifecycle_policy
+}

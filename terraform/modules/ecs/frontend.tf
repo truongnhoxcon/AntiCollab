@@ -16,6 +16,11 @@ resource "aws_cloudwatch_log_group" "frontend" {
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = [tags]
+  }
 }
 
 # ─── Task Definition ─────────────────────────────────────────────────────────

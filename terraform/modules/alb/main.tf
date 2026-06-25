@@ -90,6 +90,10 @@ resource "aws_lb_target_group" "frontend" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-fe-tg"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -123,6 +127,10 @@ resource "aws_lb_target_group" "core_backend" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-core-tg"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -161,6 +169,10 @@ resource "aws_lb_target_group" "realtime_backend" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rt-tg"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

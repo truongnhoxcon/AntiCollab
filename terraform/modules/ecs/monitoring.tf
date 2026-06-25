@@ -16,6 +16,11 @@ resource "aws_cloudwatch_log_group" "ecs_core_backend" {
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = [tags]
+  }
 }
 
 resource "aws_cloudwatch_log_group" "ecs_realtime_backend" {
@@ -28,6 +33,11 @@ resource "aws_cloudwatch_log_group" "ecs_realtime_backend" {
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = [tags]
+  }
 }
 
 resource "aws_cloudwatch_log_group" "rds_postgresql" {
@@ -39,6 +49,11 @@ resource "aws_cloudwatch_log_group" "rds_postgresql" {
     Environment = var.environment
     Project     = var.project_name
     ManagedBy   = "Terraform"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes  = [tags]
   }
 }
 
