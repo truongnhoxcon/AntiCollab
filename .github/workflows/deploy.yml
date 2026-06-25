@@ -91,6 +91,8 @@ jobs:
             --tag "$IMAGE_URI:latest" \
             --cache-from "$IMAGE_URI:latest" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --build-arg VITE_API_BASE_URL=/api \
+            --build-arg VITE_WS_URL= \
             apps/frontend
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"
