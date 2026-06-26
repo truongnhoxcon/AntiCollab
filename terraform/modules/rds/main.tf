@@ -172,7 +172,7 @@ resource "aws_db_instance" "main" {
 
   # ── Deletion Protection ───────────────────────────────────────────────────
 
-  deletion_protection = true
+  deletion_protection = false
 
   # ── Monitoring ────────────────────────────────────────────────────────────
 

@@ -35,36 +35,17 @@ io.on('connection', (socket) => {
   registerWebRTCHandler(io, socket);
 });
 
-// Simple HTTP health check endpoint for ALB target group
-app.get('/health', async (req, res) => {
-  try {
-    // Check DB
-    await db.query('SELECT 1');
-    // Check Redis
-    const redisOk = isConnected();
-    
-    return res.status(200).json({
-      status: 'UP',
-      postgres: 'healthy',
-      redis: redisOk ? 'healthy' : 'unhealthy',
-    });
-  } catch (err) {
-    console.error('Health check failed for realtime backend:', err.message);
-    return res.status(500).json({
-      status: 'DOWN',
-      error: err.message,
-    });
-  }
+// ALB liveness probe – instant 200, no dependency checks.
+// The realtime target group health_check.path is "/health" on port 4000.
+// Querying DB or Redis here would cause the task to be marked unhealthy during
+// any backing-service blip and trigger unnecessary container replacements.
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'UP' });
 });
 
-// Duplicate route for '/ws/health' matching path-based ALB configs if needed
-app.get('/ws/health', async (req, res) => {
-  try {
-    await db.query('SELECT 1');
-    return res.status(200).json({ status: 'UP', postgres: 'healthy', redis: isConnected() ? 'healthy' : 'unhealthy' });
-  } catch (err) {
-    return res.status(500).json({ status: 'DOWN', error: err.message });
-  }
+// Alias under the Socket.io path prefix for completeness.
+app.get('/ws/health', (req, res) => {
+  res.status(200).json({ status: 'UP' });
 });
 
 /**
@@ -82,10 +63,12 @@ async function startServer(port) {
     registerRedisMessageSubscriber(io);
     registerRedisPresenceSubscriber(io);
     
-    // 3. Start server
+    // 3. Start server – bind to 0.0.0.0 so the ALB and container network
+    //    can reach the process (binding to localhost/127.0.0.1 would block
+    //    any traffic originating from outside the container).
     return new Promise((resolve) => {
-      server.listen(port, () => {
-        console.log(`Real-time WebSocket server is listening on port ${port} (Path: /ws)`);
+      server.listen(port, '0.0.0.0', () => {
+        console.log(`Real-time WebSocket server is listening on 0.0.0.0:${port} (Path: /ws)`);
         resolve(server);
       });
     });

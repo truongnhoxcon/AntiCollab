@@ -41,6 +41,7 @@ locals {
 resource "aws_ecr_repository" "core_backend" {
   name                 = "core-backend"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true # <── Thêm dòng này để ép xóa kho khi có image
 
   image_scanning_configuration {
     scan_on_push = true
@@ -63,6 +64,7 @@ resource "aws_ecr_lifecycle_policy" "core_backend" {
 resource "aws_ecr_repository" "realtime_backend" {
   name                 = "realtime-backend"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true # <── Thêm dòng này để ép xóa kho khi có image
 
   image_scanning_configuration {
     scan_on_push = true
@@ -85,6 +87,7 @@ resource "aws_ecr_lifecycle_policy" "realtime_backend" {
 resource "aws_ecr_repository" "frontend" {
   name                 = "frontend"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true # <── Thêm dòng này để ép xóa kho khi có image
 
   image_scanning_configuration {
     scan_on_push = true
