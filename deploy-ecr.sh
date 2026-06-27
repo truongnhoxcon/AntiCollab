@@ -105,9 +105,27 @@ build_and_push() {
 
   # Build cho linux/amd64 — tương thích ECS Fargate (kể cả build trên Mac M1/M2)
   echo "🔨 Building..."
+  local BUILD_ARGS=()
+  if [[ "${REPO_NAME}" == "antigroup-frontend" ]]; then
+    if command -v jq &> /dev/null; then
+      echo "🔍 Fetching Google Client ID from AWS Secrets Manager..."
+      local GOOGLE_CLIENT_ID
+      GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value --secret-id "realtime-collab-staging/google-oauth" --query SecretString --region "${AWS_REGION}" --output text 2>/dev/null | jq -r '.clientId // ""' 2>/dev/null) || GOOGLE_CLIENT_ID=""
+      if [[ -n "${GOOGLE_CLIENT_ID}" && "${GOOGLE_CLIENT_ID}" != "CHANGE_ME" ]]; then
+        echo "✅ Loaded Google Client ID from Secrets Manager."
+        BUILD_ARGS+=(--build-arg "VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}")
+      else
+        echo "ℹ️  Google Client ID is not configured (or set to CHANGE_ME) in Secrets Manager."
+      fi
+    else
+      echo "⚠️  'jq' utility not found. Skipping Google Client ID extraction."
+    fi
+  fi
+
   docker build \
     --platform linux/amd64 \
     --tag "${IMAGE_LOCAL}" \
+    "${BUILD_ARGS[@]}" \
     "${BUILD_CONTEXT}"
 
   echo "🏷️  Tagging..."

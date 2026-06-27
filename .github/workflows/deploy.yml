@@ -80,6 +80,19 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Get Google Client ID from Secrets Manager
+        id: get-google-client-id
+        run: |
+          CLIENT_ID=$(aws secretsmanager get-secret-value \
+            --secret-id "realtime-collab-staging/google-oauth" \
+            --query SecretString \
+            --region ${{ env.AWS_REGION }} \
+            --output text | jq -r '.clientId // ""')
+          if [ "$CLIENT_ID" = "CHANGE_ME" ]; then
+            CLIENT_ID=""
+          fi
+          echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
+
       - name: Build & push Frontend image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
@@ -93,6 +106,7 @@ jobs:
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             --build-arg VITE_API_BASE_URL=/ \
             --build-arg VITE_WS_URL= \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${{ steps.get-google-client-id.outputs.client_id }}" \
             apps/frontend
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"

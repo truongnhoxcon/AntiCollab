@@ -31,7 +31,8 @@ resource "aws_ecs_task_definition" "core_backend" {
         { name = "NODE_ENV", value = "production" },
         { name = "DB_HOST", value = var.db_host },
         { name = "REDIS_HOST", value = var.redis_host },
-        { name = "AWS_REGION", value = var.aws_region }
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "DB_SSL", value = "true" }
       ]
 
       secrets = [
@@ -115,7 +116,8 @@ resource "aws_ecs_task_definition" "realtime_backend" {
         { name = "NODE_ENV", value = "production" },
         { name = "REDIS_HOST", value = var.redis_host },
         { name = "DB_HOST", value = var.db_host },
-        { name = "AWS_REGION", value = var.aws_region }
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "DB_SSL", value = "true" }
       ]
 
       secrets = [

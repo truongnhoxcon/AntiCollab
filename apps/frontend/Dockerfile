@@ -16,11 +16,15 @@ COPY . .
 # time even when the file already exists with different defaults.
 ARG VITE_API_BASE_URL
 ARG VITE_WS_URL
+ARG VITE_GOOGLE_CLIENT_ID
 RUN if [ -n "$VITE_API_BASE_URL" ]; then \
       echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" > .env.production; \
     fi && \
     if [ -n "$VITE_WS_URL" ]; then \
       echo "VITE_WS_URL=$VITE_WS_URL" >> .env.production; \
+    fi && \
+    if [ -n "$VITE_GOOGLE_CLIENT_ID" ]; then \
+      echo "VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID" >> .env.production; \
     fi
 
 # Build the production bundle (Vite reads .env.production automatically)
