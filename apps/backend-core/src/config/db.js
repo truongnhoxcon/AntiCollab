@@ -66,8 +66,11 @@ async function runProductionMigration() {
   }
 }
 
-// Auto-bootstrap database schema on startup
-(async () => {
+// Auto-bootstrap database schema on startup.
+// Called explicitly by app.js AFTER server.listen() so a DB failure cannot
+// prevent the HTTP port from opening (which would make the ALB health check
+// fail and cause ECS to kill the task in a restart loop).
+async function runMigration() {
   if (process.env.NODE_ENV === 'production') {
     await runProductionMigration();
   } else {
@@ -85,7 +88,7 @@ async function runProductionMigration() {
       console.error('[Database Bootstrap] PostgreSQL schema initialization failed:', error.message);
     }
   }
-})();
+}
 
 module.exports = {
   /**
@@ -99,6 +102,12 @@ module.exports = {
    * Get a client from pool for transactions.
    */
   getClient: () => pool.connect(),
+
+  /**
+   * Run DB schema migration. Called by app.js after server.listen() so that
+   * a DB failure cannot prevent the HTTP health endpoint from responding.
+   */
+  runMigration,
   
   pool,
 };

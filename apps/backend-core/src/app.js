@@ -1,5 +1,4 @@
 const express = require('express');
-const db = require('./config/db');
 const path = require('path');
 require('dotenv').config();
 
@@ -62,10 +61,22 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error occurred' });
 });
 
-// Start listening if not required as a module (useful for testing)
+// Start the HTTP server immediately so the ALB /health probe gets a 200 as
+// soon as the container starts.  DB migration runs afterwards – a migration
+// failure must NOT crash the process (it would cause the task to be killed
+// and trigger an infinite ECS restart loop).
 if (require.main === module) {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Core Backend service is running on 0.0.0.0:${PORT}`);
+  });
+
+  // Lazy-load db after the port is open to avoid crashing before listen().
+  const db = require('./config/db');
+
+  // runProductionMigration is exported so we can call it explicitly here
+  // rather than relying on the IIFE in db.js which runs at require() time.
+  db.runMigration().catch((err) => {
+    console.error('[Startup] DB migration failed – server remains up, requests may fail until DB is reachable:', err.message);
   });
 }
 
