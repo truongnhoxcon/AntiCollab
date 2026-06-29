@@ -26,13 +26,19 @@ export const useWebSocket = (token) => {
       socketHost = socketHost.slice(0, -3);
     }
 
-    // Initialize Connection to real-time engine
-    // Explicitly enforce path and auth token handoff
+    // Initialize Connection to real-time engine via CloudFront (wss://).
+    // CloudFront forwards the WebSocket Upgrade header through to the ALB,
+    // so we can use websocket transport directly without polling fallback.
+    // forceNew: true prevents socket reuse across re-renders.
     const socket = io(socketHost, {
       auth: { token },
       path: '/ws',
       transports: ['websocket'],
       forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
 
     socketRef.current = socket;

@@ -259,3 +259,19 @@ jobs:
         run: |
           echo "✅ All ECS services are stable."
           echo "   Cluster  : $ECS_CLUSTER"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          # Get CloudFront distribution ID from Terraform outputs
+          cd terraform
+          DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
+          if [ -n "$DIST_ID" ]; then
+            echo "Invalidating CloudFront distribution: $DIST_ID"
+            aws cloudfront create-invalidation \
+              --distribution-id "$DIST_ID" \
+              --paths "/*" \
+              --no-cli-pager
+            echo "✅ CloudFront cache invalidated."
+          else
+            echo "⚠️  CloudFront distribution ID not found, skipping invalidation."
+          fi

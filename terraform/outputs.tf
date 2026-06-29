@@ -2,9 +2,25 @@
 # Root outputs – exposed after `terraform apply` and consumed by CI/CD pipelines
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ALB
+# CloudFront (primary access URL — HTTPS, no custom domain needed)
+output "app_url" {
+  description = "HTTPS URL of the application via CloudFront (*.cloudfront.net). Use this to access the app."
+  value       = module.cloudfront.cloudfront_https_url
+}
+
+output "cloudfront_domain" {
+  description = "CloudFront distribution domain name (e.g. d1234abcd.cloudfront.net)."
+  value       = module.cloudfront.cloudfront_domain
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID. Used for cache invalidation in CI/CD."
+  value       = module.cloudfront.cloudfront_distribution_id
+}
+
+# ALB (internal use only — do not access directly, use CloudFront URL above)
 output "alb_dns_name" {
-  description = "Plain HTTP URL of the Application Load Balancer (demo mode)."
+  description = "Plain HTTP URL of the ALB (internal only — access app via CloudFront URL)."
   value       = module.alb.alb_dns_name
 }
 
@@ -14,8 +30,8 @@ output "alb_api_url" {
 }
 
 output "alb_ws_url" {
-  description = "WebSocket endpoint URL for the frontend."
-  value       = "ws://${module.alb.alb_raw_dns}/ws"
+  description = "WebSocket endpoint URL (internal). Frontend uses wss://<cloudfront_domain>/ws instead."
+  value       = "wss://${module.cloudfront.cloudfront_domain}/ws"
 }
 
 # ECS
@@ -61,6 +77,6 @@ output "realtime_backend_ecr_url" {
 
 # GitHub Actions
 output "github_actions_role_arn" {
-  description = "ARN of the GitHub Actions OIDC IAM role. Copy this value into the AWS_GITHUB_ACTIONS_ROLE_ARN GitHub Secret."
+  description = "ARN of the GitHub Actions OIDC IAM role."
   value       = module.iam.github_actions_role_arn
 }

@@ -144,8 +144,24 @@ module "alb" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ECS – depends on all preceding modules
+# CloudFront – depends on ALB
+#
+# Provides HTTPS (TLS 1.2+) via *.cloudfront.net without requiring a custom
+# domain. CloudFront terminates TLS and forwards HTTP to the ALB internally.
+# WebSocket (/ws/*) is supported natively via CloudFront's allViewer header
+# forwarding — the Upgrade/Connection headers pass through to realtime-backend.
 # ─────────────────────────────────────────────────────────────────────────────
+
+module "cloudfront" {
+  source       = "./modules/cloudfront"
+  project_name = var.project_name
+  environment  = var.environment
+  alb_dns_name = module.alb.alb_raw_dns
+
+  depends_on = [module.alb]
+}
+
+
 
 module "ecs" {
   source = "./modules/ecs"
