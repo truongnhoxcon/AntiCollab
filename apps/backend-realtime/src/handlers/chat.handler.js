@@ -108,12 +108,29 @@ function registerChatHandler(io, socket) {
         },
       };
 
-      // 4. Publish to Redis Pub/Sub instead of direct emit (syncs multi-container deployments)
-      await pubClient.publish('realtime:messages', JSON.stringify({
+      // 4. Publish to Redis Pub/Sub for cross-container broadcast.
+      //    Also emit directly to the sender's socket so the message appears
+      //    immediately even if Redis Pub/Sub is delayed or unavailable.
+      const publishPayload = JSON.stringify({
         event: 'new_message',
         channelId,
         message: messagePayload,
-      }));
+        originSocketId: socket.id, // used by subscriber to skip re-emit on same container
+      });
+
+      // Direct emit to all sockets in this room on this container instance.
+      // This handles the common case where both users are on the same container
+      // (sticky sessions) without depending on the Redis Pub/Sub round-trip.
+      io.to(`channel:${channelId}`).emit('message', messagePayload);
+
+      // Also publish to Redis so other container instances broadcast to their
+      // locally connected clients (multi-container sync).
+      try {
+        await pubClient.publish('realtime:messages', publishPayload);
+      } catch (pubErr) {
+        console.error('[Redis] Failed to publish message to Pub/Sub:', pubErr.message);
+        // Direct emit above already handled local delivery — this is non-fatal.
+      }
 
     } catch (err) {
       console.error('Error handling send_message:', err);
@@ -124,16 +141,23 @@ function registerChatHandler(io, socket) {
 
 /**
  * Listen for message sync events via Redis Pub/Sub and broadcast to local connected clients.
+ * Only re-emits messages that originated from OTHER container instances to avoid duplicates
+ * (direct io.to().emit() in the send_message handler already covers local delivery).
  * 
  * @param {Object} io - Socket.io server instance
  */
 function registerRedisMessageSubscriber(io) {
   subClient.subscribe('realtime:messages', (messageJson) => {
     try {
-      const { event, channelId, message } = JSON.parse(messageJson);
+      const parsed = JSON.parse(messageJson);
+      const { event, channelId, message, originSocketId } = parsed;
       
       if (event === 'new_message') {
-        // Broadcast to all clients connected on this specific Fargate instance inside the room
+        // Skip if this message was published by the current container instance
+        // (already emitted directly in send_message handler to avoid duplicates).
+        if (originSocketId && io.sockets.sockets.has(originSocketId)) {
+          return;
+        }
         io.to(`channel:${channelId}`).emit('message', message);
       }
     } catch (err) {

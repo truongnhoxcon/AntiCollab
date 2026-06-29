@@ -33,14 +33,26 @@ async function registerPresenceHandler(io, socket) {
       // Set presence key in Redis with 60s TTL
       await setUserPresence(serverId, userId, 'online', 60);
 
-      // Publish presence change event to Redis Pub/Sub
-      await pubClient.publish('realtime:presence', JSON.stringify({
-        event: 'presence_change',
-        serverId,
+      // Broadcast presence online to all sockets in the server room on this
+      // container directly — does not wait for Redis Pub/Sub round-trip.
+      io.to(`server:${serverId}`).emit('presence_change', {
         userId,
         username,
         status: 'online',
-      }));
+      });
+
+      // Also publish to Redis for cross-container sync.
+      try {
+        await pubClient.publish('realtime:presence', JSON.stringify({
+          event: 'presence_change',
+          serverId,
+          userId,
+          username,
+          status: 'online',
+        }));
+      } catch (pubErr) {
+        console.error('[Redis] Failed to publish presence online:', pubErr.message);
+      }
     }
 
     // 2. Set up presence status TTL refresh loop (runs every 30 seconds)
@@ -123,14 +135,25 @@ async function registerPresenceHandler(io, socket) {
           // Delete presence key in Redis
           await removeUserPresence(serverId, userId);
 
-          // Publish presence offline change to Redis Pub/Sub
-          await pubClient.publish('realtime:presence', JSON.stringify({
-            event: 'presence_change',
-            serverId,
+          // Broadcast offline presence directly to local sockets first.
+          io.to(`server:${serverId}`).emit('presence_change', {
             userId,
             username,
             status: 'offline',
-          }));
+          });
+
+          // Publish to Redis for cross-container sync.
+          try {
+            await pubClient.publish('realtime:presence', JSON.stringify({
+              event: 'presence_change',
+              serverId,
+              userId,
+              username,
+              status: 'offline',
+            }));
+          } catch (pubErr) {
+            console.error('[Redis] Failed to publish presence offline:', pubErr.message);
+          }
         }
       } else {
         console.log(`User ${username} still has ${userSockets.length} other active connection(s). Remaining online.`);
