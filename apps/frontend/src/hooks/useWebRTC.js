@@ -147,6 +147,14 @@ export const useWebRTC = (socket, channelId) => {
 
     const startCall = async () => {
       try {
+        // mediaDevices is only available in secure contexts (HTTPS or localhost).
+        // Show a clear error instead of crashing with "Cannot read properties of undefined".
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error('[WebRTC] navigator.mediaDevices is unavailable. The page must be served over HTTPS for camera/microphone access.');
+          alert('Camera and microphone access requires a secure connection (HTTPS). Please contact the administrator.');
+          return;
+        }
+
         console.log('[WebRTC] Requesting local camera/microphone media permissions...');
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
