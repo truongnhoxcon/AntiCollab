@@ -1,18 +1,22 @@
 const { createClient } = require('redis');
 require('dotenv').config();
 
+const useTls = process.env.REDIS_TLS === 'true';
+const password = process.env.REDIS_PASSWORD;
+const host = process.env.REDIS_HOST || 'localhost';
+const port = process.env.REDIS_PORT || '6379';
+
 const redisOptions = {
+  url: `${useTls ? 'rediss' : 'redis'}://${password ? `default:${encodeURIComponent(password)}@` : ''}${host}:${port}`,
   socket: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    tls: process.env.REDIS_TLS === 'true' ? { rejectUnauthorized: false } : undefined,
+    rejectUnauthorized: false,
     reconnectStrategy: (retries) => {
       // Reconnect strategy: try again every 1 second, up to a maximum delay of 3 seconds
       return Math.min(retries * 1000, 3000);
     }
-  },
-  password: process.env.REDIS_PASSWORD || undefined,
+  }
 };
+
 
 // Create main Redis clients
 const redisClient = createClient(redisOptions);
