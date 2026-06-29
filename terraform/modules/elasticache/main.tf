@@ -70,7 +70,7 @@ resource "aws_elasticache_replication_group" "main" {
 
   engine         = "redis"
   engine_version = "7.0"             # Stable, widely supported on us-east-1
-  node_type      = "cache.t3.medium" # Requirement 4.2
+  node_type      = "cache.t3.micro" # Scaled down for cost saving
 
   # ── Cluster topology – Single-AZ, no replicas ─────────────────────────────
 
