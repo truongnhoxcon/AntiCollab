@@ -3,7 +3,7 @@ import axios from 'axios';
 // In production the ALB routes /api/* to core-backend, so a relative base URL
 // is all that's needed.  The localhost fallback is only active during local
 // development (when .env.production is not loaded by Vite).
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // Empty string → connect to the current page origin (production via ALB).
 // The ALB /ws/* rule forwards those connections to realtime-backend.

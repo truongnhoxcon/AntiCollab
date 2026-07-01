@@ -374,6 +374,86 @@ async function updateMe(req, res) {
   }
 }
 
+/**
+ * GET /api/users/me/dms/:dmUserId/messages
+ * Returns message history between current user and dmUserId.
+ */
+async function getDMMessages(req, res) {
+  try {
+    const userId = req.user.id;
+    const { dmUserId } = req.params;
+
+    const result = await db.query(
+      `SELECT m.id, m.content, m.created_at, m.sender_id, u.username as sender_username
+       FROM messages m
+       LEFT JOIN users u ON m.sender_id = u.id
+       WHERE (m.sender_id = $1 AND m.receiver_id = $2)
+          OR (m.sender_id = $2 AND m.receiver_id = $1)
+       ORDER BY m.created_at ASC`,
+      [userId, dmUserId]
+    );
+
+    const messages = result.rows.map(row => ({
+      id: row.id,
+      content: row.content,
+      createdAt: row.created_at,
+      senderId: row.sender_id,
+      sender: {
+        id: row.sender_id,
+        username: row.sender_username
+      }
+    }));
+
+    return res.status(200).json({ success: true, messages });
+  } catch (error) {
+    console.error('Error fetching DM messages:', error);
+    return res.status(500).json({ error: 'Internal server error fetching DM messages' });
+  }
+}
+
+/**
+ * POST /api/users/me/dms/:dmUserId/messages
+ * Sends a DM message via HTTP API.
+ */
+async function sendDMMessageAPI(req, res) {
+  try {
+    const userId = req.user.id;
+    const { dmUserId } = req.params;
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Content is required' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO messages (sender_id, receiver_id, content)
+       VALUES ($1, $2, $3)
+       RETURNING id, content, created_at`,
+      [userId, dmUserId, content.trim()]
+    );
+
+    const dbMessage = result.rows[0];
+
+    return res.status(201).json({
+      success: true,
+      message: {
+        id: dbMessage.id,
+        content: dbMessage.content,
+        createdAt: dbMessage.created_at,
+        senderId: userId,
+        receiverId: dmUserId,
+        sender: {
+          id: userId,
+          username: req.user.username
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error sending DM message via API:', error);
+    return res.status(500).json({ error: 'Internal server error sending DM message' });
+  }
+}
+
 module.exports = {
   getMyDMs,
   hideDM,
@@ -383,7 +463,9 @@ module.exports = {
   startDM,
   getMe,
   verifyPassword,
-  updateMe
+  updateMe,
+  getDMMessages,
+  sendDMMessageAPI
 };
 
 

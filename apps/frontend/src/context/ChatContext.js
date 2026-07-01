@@ -22,6 +22,11 @@ export const ChatProvider = ({ children }) => {
   const [globalOnlineUserIds, setGlobalOnlineUserIds] = useState(() => {
     return new Set();
   });
+  const [voiceStates, setVoiceStates] = useState({});
+
+  useEffect(() => {
+    setVoiceStates({});
+  }, [activeServerId]);
 
   // Keep ref of active ids to use inside socket event listeners
   const activeChannelIdRef = useRef(localStorage.getItem('activeChannelId') || null);
@@ -134,12 +139,49 @@ export const ChatProvider = ({ children }) => {
       });
     };
 
+    const handleServerVoiceUsers = ({ serverId, voiceUsers }) => {
+      console.log(`[WebSocket Voice] Initial voice users for server ${serverId}:`, voiceUsers);
+      const grouped = {};
+      voiceUsers.forEach(({ channelId, userId, username }) => {
+        if (!grouped[channelId]) grouped[channelId] = [];
+        grouped[channelId].push({ userId, username });
+      });
+      setVoiceStates(grouped);
+    };
+
+    const handleVoiceUserJoined = ({ channelId, userId, username }) => {
+      console.log(`[WebSocket Voice] User ${username} joined channel ${channelId}`);
+      setVoiceStates((prev) => {
+        const next = { ...prev };
+        const list = next[channelId] ? [...next[channelId]] : [];
+        if (!list.some((u) => u.userId === userId)) {
+          list.push({ userId, username });
+        }
+        next[channelId] = list;
+        return next;
+      });
+    };
+
+    const handleVoiceUserLeft = ({ channelId, userId }) => {
+      console.log(`[WebSocket Voice] User ${userId} left channel ${channelId}`);
+      setVoiceStates((prev) => {
+        const next = { ...prev };
+        if (next[channelId]) {
+          next[channelId] = next[channelId].filter((u) => u.userId !== userId);
+        }
+        return next;
+      });
+    };
+
     socket.on('message', handleNewMessage);
     socket.on('receive_message', handleNewMessage); // Compatibility fallback
     socket.on('presence_change', handlePresenceChange);
     socket.on('user_online', (data) => handlePresenceChange({ ...data, status: 'online' }));
     socket.on('user_offline', (data) => handlePresenceChange({ ...data, status: 'offline' }));
     socket.on('server_online_users', handleServerOnlineUsers);
+    socket.on('server_voice_users', handleServerVoiceUsers);
+    socket.on('voice_user_joined', handleVoiceUserJoined);
+    socket.on('voice_user_left', handleVoiceUserLeft);
 
     return () => {
       socket.off('message', handleNewMessage);
@@ -148,6 +190,9 @@ export const ChatProvider = ({ children }) => {
       socket.off('user_online');
       socket.off('user_offline');
       socket.off('server_online_users', handleServerOnlineUsers);
+      socket.off('server_voice_users', handleServerVoiceUsers);
+      socket.off('voice_user_joined', handleVoiceUserJoined);
+      socket.off('voice_user_left', handleVoiceUserLeft);
     };
   }, [socket]);
 
@@ -158,16 +203,23 @@ export const ChatProvider = ({ children }) => {
     setLoading(true);
     try {
       const response = await api.get('/api/servers');
-      setServers(response.data);
-      
-      // If we have an activeServerId from localStorage, verify it still exists in the fetched list.
-      // If it doesn't exist anymore, reset to Home (null).
-      if (activeServerIdRef.current) {
-        const serverExists = response.data.some((s) => s.id === activeServerIdRef.current);
-        if (!serverExists) {
-          setActiveServerId(null);
-          setActiveChannelId(null);
+      if (Array.isArray(response.data)) {
+        setServers(response.data);
+        
+        // If we have an activeServerId from localStorage, verify it still exists in the fetched list.
+        // If it doesn't exist anymore, reset to Home (null).
+        if (activeServerIdRef.current) {
+          const serverExists = response.data.some((s) => s.id === activeServerIdRef.current);
+          if (!serverExists) {
+            setActiveServerId(null);
+            setActiveChannelId(null);
+          }
         }
+      } else {
+        console.error('[ChatContext] API returned non-array servers response:', response.data);
+        setServers([]);
+        setActiveServerId(null);
+        setActiveChannelId(null);
       }
     } catch (error) {
       console.error('[ChatContext] Failed to fetch servers from API:', error.message);
@@ -187,7 +239,8 @@ export const ChatProvider = ({ children }) => {
     try {
       const response = await api.get(`/api/channels/${channelId}/messages`);
       // Sort messages in ascending order for chat window rendering
-      const messageList = [...response.data.messages].reverse();
+      const rawMessages = response.data && Array.isArray(response.data.messages) ? response.data.messages : [];
+      const messageList = [...rawMessages].reverse();
       setMessages(messageList);
       
       // Update active users/members list based on actual senders in chat history + self
@@ -311,7 +364,7 @@ export const ChatProvider = ({ children }) => {
         servers,
         activeServerId,
         setActiveServerId,
-        channels: servers.find((s) => s.id === activeServerId)?.channels || [],
+        channels: Array.isArray(servers) ? (servers.find((s) => s.id === activeServerId)?.channels || []) : [],
         activeChannelId,
         setActiveChannelId,
         messages,
@@ -324,6 +377,8 @@ export const ChatProvider = ({ children }) => {
         socket,
         globalOnlineUserIds,
         setGlobalOnlineUserIds,
+        voiceStates,
+        setVoiceStates,
       }}
     >
       {children}

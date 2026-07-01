@@ -116,3 +116,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_status VARCHAR(100);
 
 -- Ensure password_hash can be null for Google OAuth users
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
+-- Ensure messages table supports direct messaging (receiver_id)
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS receiver_id UUID REFERENCES users(id) ON DELETE SET NULL;

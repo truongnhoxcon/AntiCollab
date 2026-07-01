@@ -14,6 +14,8 @@ router.post('/me/verify-password', userController.verifyPassword);
 router.get('/me/dms', userController.getMyDMs);
 router.post('/me/dms', userController.startDM);
 router.delete('/me/dms/:dmUserId', userController.hideDM);
+router.get('/me/dms/:dmUserId/messages', userController.getDMMessages);
+router.post('/me/dms/:dmUserId/messages', userController.sendDMMessageAPI);
 router.get('/me/friends', userController.getMyFriends);
 router.post('/me/friends', userController.addFriend);
 router.get('/me/activities', userController.getActivities);
