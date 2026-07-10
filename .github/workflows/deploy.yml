@@ -8,8 +8,8 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: unified-backend
-  ECS_CLUSTER: realtime-collab-cluster
-  ECS_SERVICE: realtime-collab-unified-backend-service
+  ECS_CLUSTER: realtime-collab-dev
+  ECS_SERVICE: unified-backend
 
 jobs:
   deploy:
