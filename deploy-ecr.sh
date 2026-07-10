@@ -64,8 +64,7 @@ aws ecr get-login-password \
 echo "✅ Đăng nhập ECR thành công."
 
 # ── 4. Tạo ECR Repositories nếu chưa tồn tại ─────────────────────────────────
-# Đặt tên theo quy ước dự án antigroup-*
-REPOS=("antigroup-frontend" "antigroup-core" "antigroup-realtime")
+REPOS=("unified-backend")
 
 echo ""
 echo "📦 Kiểm tra và tạo ECR Repositories..."
@@ -106,21 +105,6 @@ build_and_push() {
   # Build cho linux/amd64 — tương thích ECS Fargate (kể cả build trên Mac M1/M2)
   echo "🔨 Building..."
   local BUILD_ARGS=()
-  if [[ "${REPO_NAME}" == "antigroup-frontend" ]]; then
-    if command -v jq &> /dev/null; then
-      echo "🔍 Fetching Google Client ID from AWS Secrets Manager..."
-      local GOOGLE_CLIENT_ID
-      GOOGLE_CLIENT_ID=$(aws secretsmanager get-secret-value --secret-id "realtime-collab-staging/google-oauth" --query SecretString --region "${AWS_REGION}" --output text 2>/dev/null | jq -r '.clientId // ""' 2>/dev/null) || GOOGLE_CLIENT_ID=""
-      if [[ -n "${GOOGLE_CLIENT_ID}" && "${GOOGLE_CLIENT_ID}" != "CHANGE_ME" ]]; then
-        echo "✅ Loaded Google Client ID from Secrets Manager."
-        BUILD_ARGS+=(--build-arg "VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}")
-      else
-        echo "ℹ️  Google Client ID is not configured (or set to CHANGE_ME) in Secrets Manager."
-      fi
-    else
-      echo "⚠️  'jq' utility not found. Skipping Google Client ID extraction."
-    fi
-  fi
 
   docker build \
     --platform linux/amd64 \
@@ -137,46 +121,29 @@ build_and_push() {
   echo "✅ [${SERVICE_LABEL}] Push thành công!"
 }
 
-# ── 6. Build và Push 3 services ───────────────────────────────────────────────
+# ── 6. Build và Push unified service ──────────────────────────────────────────
 echo ""
 echo "🚀 Bắt đầu build và push images..."
 
-# Frontend: Nginx + React (port 80)
 build_and_push \
-  "Frontend (Nginx)" \
-  "antigroup-frontend" \
-  "${SCRIPT_DIR}/apps/frontend"
-
-# Backend Core: REST API (port 3000)
-build_and_push \
-  "Backend-Core (REST API)" \
-  "antigroup-core" \
-  "${SCRIPT_DIR}/apps/backend-core"
-
-# Backend Realtime: WebSocket Engine (port 4000)
-build_and_push \
-  "Backend-Realtime (WebSocket)" \
-  "antigroup-realtime" \
-  "${SCRIPT_DIR}/apps/backend-realtime"
+  "Backend Unified (REST + WS)" \
+  "unified-backend" \
+  "${SCRIPT_DIR}/apps/backend-unified"
 
 # ── 7. In tóm tắt kết quả ─────────────────────────────────────────────────────
 echo ""
 echo "========================================================"
-echo " ✅ HOÀN THÀNH — Tất cả images đã được push lên ECR"
+echo " ✅ HOÀN THÀNH — Ứng dụng đã được push lên ECR"
 echo "========================================================"
 echo ""
-echo " ECR Image URIs:"
+echo " ECR Image URI:"
 echo ""
-echo "   Frontend  : ${ECR_REGISTRY}/antigroup-frontend:latest"
-echo "   Core      : ${ECR_REGISTRY}/antigroup-core:latest"
-echo "   Realtime  : ${ECR_REGISTRY}/antigroup-realtime:latest"
+echo "   Unified Backend : ${ECR_REGISTRY}/unified-backend:latest"
 echo ""
 echo "──────────────────────────────────────────────────────"
 echo " 📝 Cập nhật terraform/terraform.tfvars:"
 echo ""
-echo "   frontend_image         = \"${ECR_REGISTRY}/antigroup-frontend:latest\""
-echo "   core_backend_image     = \"${ECR_REGISTRY}/antigroup-core:latest\""
-echo "   realtime_backend_image = \"${ECR_REGISTRY}/antigroup-realtime:latest\""
+echo "   unified_backend_image = \"${ECR_REGISTRY}/unified-backend:latest\""
 echo ""
 echo " Sau đó chạy: bash deploy-infrastructure.sh"
 echo "========================================================"

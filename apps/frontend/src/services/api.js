@@ -10,7 +10,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localho
 // Locally, point to the docker-compose realtime service port.
 export const WS_URL = import.meta.env.VITE_WS_URL
   ? import.meta.env.VITE_WS_URL
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000');
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 
 // Create an Axios instance pointing to the REST API Core Backend
 const api = axios.create({
