@@ -382,6 +382,7 @@ module.exports = {
   getActivities,
   startDM,
   getMe,
+  verifyPassword,
   updateMe,
   getDMMessages,
   sendDMMessageAPI
