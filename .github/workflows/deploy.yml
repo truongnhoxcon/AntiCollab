@@ -12,8 +12,8 @@ env:
   ECS_SERVICE: unified-backend
 
 jobs:
-  deploy:
-    name: Build and Deploy
+  deploy-backend:
+    name: Build and Deploy Backend
     runs-on: ubuntu-latest
 
     steps:
@@ -47,3 +47,49 @@ jobs:
       - name: Force New ECS Deployment
         run: |
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --force-new-deployment
+
+  deploy-frontend:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies and build frontend
+        run: |
+          cd apps/frontend
+          npm ci
+          npm run build
+
+      - name: Deploy Frontend to S3 and Invalidate CloudFront
+        run: |
+          # 1. Tự động tìm S3 Bucket Frontend của dự án
+          FRONTEND_BUCKET=$(aws s3 ls | grep realtime-collab-frontend | awk '{print $3}')
+          echo "Found S3 Bucket: $FRONTEND_BUCKET"
+          
+          # 2. Sync tệp đã build lên S3
+          aws s3 sync apps/frontend/dist/ s3://$FRONTEND_BUCKET/ --delete
+
+          # 3. Tự động tìm CloudFront Distribution ID liên kết với S3 Bucket này
+          DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, '$FRONTEND_BUCKET')].Id | [0]" --output text)
+          echo "Found CloudFront Distribution ID: $DIST_ID"
+
+          # 4. Invalidate cache để cập nhật ngay lập tức giao diện mới
+          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
+            aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" --no-cli-pager
+          fi
