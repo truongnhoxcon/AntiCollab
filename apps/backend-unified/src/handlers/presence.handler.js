@@ -71,6 +71,15 @@ async function registerPresenceHandler(io, socket) {
         for (const row of servers.rows) {
           await setUserPresence(row.server_id, userId, 'online', 60);
         }
+
+        // Refresh voice state key if in voice channel
+        if (socket.currentVoiceChannelId && socket.currentVoiceServerId) {
+          await redisClient.set(
+            `presence:voice:${socket.currentVoiceServerId}:${socket.currentVoiceChannelId}:${userId}`,
+            username,
+            { EX: 60 }
+          );
+        }
       } catch (err) {
         console.error(`Error refreshing presence for user ${userId}:`, err.message);
       }
@@ -172,7 +181,8 @@ async function registerPresenceHandler(io, socket) {
 function registerRedisPresenceSubscriber(io) {
   subClient.subscribe('realtime:presence', (messageJson) => {
     try {
-      const { event, serverId, userId, username, status } = JSON.parse(messageJson);
+      const parsed = JSON.parse(messageJson);
+      const { event, serverId, userId, username, status, channelId } = parsed;
       
       if (event === 'presence_change') {
         // Broadcast presence updates to all local sockets in the server room
@@ -182,6 +192,19 @@ function registerRedisPresenceSubscriber(io) {
           status,
         });
         console.log(`[Presence Sync] Broadcasted presence for user ${username} (${status}) to server room "server:${serverId}"`);
+      } else if (event === 'voice_user_joined') {
+        io.to(`server:${serverId}`).emit('voice_user_joined', {
+          serverId,
+          channelId,
+          userId,
+          username,
+        });
+      } else if (event === 'voice_user_left') {
+        io.to(`server:${serverId}`).emit('voice_user_left', {
+          serverId,
+          channelId,
+          userId,
+        });
       }
     } catch (err) {
       console.error('Error parsing Redis Pub/Sub presence message:', err);

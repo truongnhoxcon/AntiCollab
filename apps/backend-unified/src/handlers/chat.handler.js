@@ -62,6 +62,26 @@ function registerChatHandler(io, socket) {
       } catch (redisErr) {
         console.error('Error fetching online users from Redis in join_channel:', redisErr.message);
       }
+
+      // Fetch active voice users from Redis for this server
+      try {
+        const { redisClient } = require('../config/redis');
+        const voiceKeys = await redisClient.keys(`presence:voice:${serverId}:*`);
+        const voiceUsers = [];
+        for (const key of voiceKeys) {
+          const parts = key.split(':');
+          const channelId = parts[3];
+          const userId = parts[4];
+          const username = await redisClient.get(key);
+          if (username) {
+            voiceUsers.push({ channelId, userId, username });
+          }
+        }
+        socket.emit('server_voice_users', { serverId, voiceUsers });
+        console.log(`Sent ${voiceUsers.length} voice users for server ${serverId} to user ${socket.user.username}`);
+      } catch (redisErr) {
+        console.error('Error fetching voice users from Redis in join_channel:', redisErr.message);
+      }
     } catch (err) {
       console.error('Error handling join_channel:', err);
       socket.emit('error', { message: 'Internal server error while joining channel' });
@@ -137,6 +157,59 @@ function registerChatHandler(io, socket) {
       socket.emit('error', { message: 'Internal server error while saving message' });
     }
   });
+
+  // Event: Send Direct Message (DM)
+  socket.on('send_dm', async ({ receiverId, content }) => {
+    try {
+      const senderId = socket.user.id;
+
+      if (!receiverId || !content || content.trim() === '') {
+        return socket.emit('error', { message: 'Missing DM parameters' });
+      }
+
+      // 1. Persist DM message to PostgreSQL
+      const insertResult = await db.query(
+        'INSERT INTO messages (sender_id, receiver_id, content) VALUES ($1, $2, $3) RETURNING id, content, created_at',
+        [senderId, receiverId, content.trim()]
+      );
+
+      const dbMessage = insertResult.rows[0];
+
+      // 2. Construct message object
+      const messagePayload = {
+        id: dbMessage.id,
+        content: dbMessage.content,
+        createdAt: dbMessage.created_at,
+        senderId,
+        receiverId,
+        sender: {
+          id: senderId,
+          username: socket.user.username,
+        },
+      };
+
+      // 3. Emit to sender and receiver user rooms
+      io.to(`user:${senderId}`).emit('dm_message', messagePayload);
+      io.to(`user:${receiverId}`).emit('dm_message', messagePayload);
+
+      // 4. Publish to Redis Pub/Sub for cross-container broadcast
+      const publishPayload = JSON.stringify({
+        event: 'new_dm_message',
+        message: messagePayload,
+        originSocketId: socket.id,
+      });
+
+      try {
+        await pubClient.publish('realtime:messages', publishPayload);
+      } catch (pubErr) {
+        console.error('[Redis] Failed to publish DM message to Pub/Sub:', pubErr.message);
+      }
+
+    } catch (err) {
+      console.error('Error handling send_dm:', err);
+      socket.emit('error', { message: 'Internal server error while saving DM message' });
+    }
+  });
 }
 
 /**
@@ -152,13 +225,17 @@ function registerRedisMessageSubscriber(io) {
       const parsed = JSON.parse(messageJson);
       const { event, channelId, message, originSocketId } = parsed;
       
+      // Skip if this message was published by the current container instance
+      if (originSocketId && io.sockets.sockets.has(originSocketId)) {
+        return;
+      }
+
       if (event === 'new_message') {
-        // Skip if this message was published by the current container instance
-        // (already emitted directly in send_message handler to avoid duplicates).
-        if (originSocketId && io.sockets.sockets.has(originSocketId)) {
-          return;
-        }
         io.to(`channel:${channelId}`).emit('message', message);
+      } else if (event === 'new_dm_message') {
+        const { senderId, receiverId } = message;
+        io.to(`user:${senderId}`).emit('dm_message', message);
+        io.to(`user:${receiverId}`).emit('dm_message', message);
       }
     } catch (err) {
       console.error('Error parsing Redis Pub/Sub chat message:', err);
