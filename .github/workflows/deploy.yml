@@ -6,10 +6,10 @@ on:
       - main  # Tự động chạy khi có lệnh push lên nhánh main
 
 env:
-  AWS_REGION: us-east-1                    # Thay thế bằng Region của bạn
-  ECR_REPOSITORY: realtime-collab-api      # Tên ECR Repository bạn tạo ở Bước 8
-  ECS_CLUSTER: realtime-collab-cluster     # Tên ECS Cluster của bạn
-  ECS_SERVICE: realtime-collab-service     # Tên ECS Service bạn tạo ở Bước 11
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: unified-backend
+  ECS_CLUSTER: realtime-collab-cluster
+  ECS_SERVICE: realtime-collab-unified-backend-service
 
 jobs:
   deploy:
@@ -34,12 +34,12 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # Bước 4: Biên dịch Docker image, gắn thẻ phiên bản và đẩy lên ECR
+      # Bước 4: Biên dịch Docker image từ thư mục apps/backend-unified, gắn thẻ và đẩy lên ECR
       - name: Build, tag, and push image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} -t $ECR_REGISTRY/$ECR_REPOSITORY:latest apps/backend-unified
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
