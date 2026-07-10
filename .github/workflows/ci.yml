@@ -3,10 +3,9 @@
 #
 # Triggers on every PR targeting `main`.
 # Jobs run in parallel:
-#   • lint-frontend      – npm ci + vite build
-#   • lint-backend-core  – npm ci (no build script; verifies dependency tree)
-#   • lint-backend-realtime – npm ci
-#   • terraform-check    – fmt -check + validate + plan (read-only, no apply)
+#   • lint-frontend         – npm ci + vite build
+#   • lint-backend-unified  – npm ci + syntax check
+#   • terraform-check       – fmt -check + validate + plan (read-only)
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -51,13 +50,13 @@ jobs:
       - name: Build (vite build)
         run: npm run build
 
-# ─── Job: Backend Core ────────────────────────────────────────────────────────
-  lint-backend-core:
-    name: "Backend Core – install"
+# ─── Job: Backend Unified ─────────────────────────────────────────────────────
+  lint-backend-unified:
+    name: "Backend Unified – install"
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/backend-core
+        working-directory: apps/backend-unified
 
     steps:
       - name: Checkout code
@@ -68,7 +67,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: apps/backend-core/package-lock.json
+          cache-dependency-path: apps/backend-unified/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -77,37 +76,10 @@ jobs:
       - name: Syntax check
         run: node --check src/app.js
 
-# ─── Job: Backend Realtime ────────────────────────────────────────────────────
-  lint-backend-realtime:
-    name: "Backend Realtime – install"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/backend-realtime
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: apps/backend-realtime/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Validate entry point syntax
-      - name: Syntax check
-        run: node --check src/index.js
-
 # ─── Job: Terraform checks ────────────────────────────────────────────────────
   terraform-check:
     name: "Terraform – fmt / validate / plan"
     runs-on: ubuntu-latest
-    # OIDC: read-only plan only; no state writes, no apply
     permissions:
       id-token: write   # required for OIDC token request
       contents: read
@@ -157,11 +129,6 @@ jobs:
             -var="github_repo=Real-time-Streaming-Collaboration" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
             -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
-            -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-frontend:latest" \
-            -var="core_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-core:latest" \
-            -var="realtime_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-realtime:latest" \
+            -var="unified_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/unified-backend:latest" \
             -no-color \
             -out=tfplan
-        # Plan output is intentionally not uploaded to artifacts here since
-        # it may contain sensitive endpoint values. The deploy job runs its
-        # own plan+apply atomically after merge.

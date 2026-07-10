@@ -111,24 +111,24 @@ echo ""
 terraform output
 echo ""
 
-# Lấy ALB DNS
-ALB_URL=$(terraform output -raw alb_dns_name 2>/dev/null || echo "N/A")
-ALB_RAW=$(terraform output -raw alb_raw_dns 2>/dev/null || echo "N/A")
+# Lấy CloudFront và ECS information
+CF_URL=$(terraform output -raw app_url 2>/dev/null || echo "N/A")
+CF_DOMAIN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "N/A")
 ECS_CLUSTER=$(terraform output -raw ecs_cluster_name 2>/dev/null || echo "N/A")
 
 echo "──────────────────────────────────────────────────────"
-echo " 🌐 ALB Endpoint (Ingress URL):"
+echo " 🌐 CloudFront Application Endpoint (Ingress URL):"
 echo ""
-echo "   ${ALB_URL}"
+echo "   ${CF_URL}"
 echo ""
 echo " 📡 Định tuyến:"
-echo "   REST API  → ${ALB_URL}/api/*"
-echo "   WebSocket → ws://${ALB_RAW}/ws/*"
+echo "   REST API  → ${CF_URL}/api/*"
+echo "   WebSocket → wss://${CF_DOMAIN}/ws/*"
 echo ""
 echo " 📝 Biến môi trường cho team Frontend:"
 echo ""
-echo "   VITE_API_BASE_URL=${ALB_URL}/api"
-echo "   VITE_WS_URL=ws://${ALB_RAW}/ws"
+echo "   VITE_API_BASE_URL=${CF_URL}/api"
+echo "   VITE_WS_URL=wss://${CF_DOMAIN}"
 echo ""
 echo " 🔍 Kiểm tra ECS Services:"
 echo "   aws ecs list-tasks --cluster ${ECS_CLUSTER} --region us-east-1"

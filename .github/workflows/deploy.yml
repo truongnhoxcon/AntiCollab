@@ -1,286 +1,49 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Deploy Workflow – Production deployment on merge to `main`
-# ─────────────────────────────────────────────────────────────────────────────
-
-name: Deploy
+name: Deploy Backend to Amazon ECS
 
 on:
   push:
     branches:
-      - main
-
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
+      - main  # Tự động chạy khi có lệnh push lên nhánh main
 
 env:
-  NODE_VERSION: "20"
-  TF_VERSION: "1.8.5"
-  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_REGION: us-east-1                    # Thay thế bằng Region của bạn
+  ECR_REPOSITORY: realtime-collab-api      # Tên ECR Repository bạn tạo ở Bước 8
+  ECS_CLUSTER: realtime-collab-cluster     # Tên ECS Cluster của bạn
+  ECS_SERVICE: realtime-collab-service     # Tên ECS Service bạn tạo ở Bước 11
 
-  # ECR repository names (ĐÃ SỬA CHUẨN THEO TERRAFORM)
-  ECR_REPO_FRONTEND: frontend
-  ECR_REPO_CORE: core-backend
-  ECR_REPO_REALTIME: realtime-backend
-
-  # ECS names
-  ECS_CLUSTER: realtime-collab-cluster
-  ECS_SERVICE_FRONTEND: realtime-collab-frontend-service
-  ECS_SERVICE_CORE: realtime-collab-core-backend-service
-  ECS_SERVICE_REALTIME: realtime-collab-realtime-backend-service
-
-# ─── Stage 1: Build & Push Docker images to ECR ──────────────────────────────
 jobs:
-  build-and-push:
-    name: "Build & Push images to ECR"
+  deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-
-    outputs:
-      image_tag: ${{ steps.meta.outputs.image_tag }}
 
     steps:
+      # Bước 1: Kéo mã nguồn mới nhất từ GitHub về máy ảo chạy Action
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Compute image tag
-        id: meta
-        run: echo "image_tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache frontend node_modules
-        uses: actions/cache@v4
-        with:
-          path: apps/frontend/node_modules
-          key: frontend-${{ hashFiles('apps/frontend/package-lock.json') }}
-          restore-keys: frontend-
-
-      - name: Cache backend-core node_modules
-        uses: actions/cache@v4
-        with:
-          path: apps/backend-core/node_modules
-          key: backend-core-${{ hashFiles('apps/backend-core/package-lock.json') }}
-          restore-keys: backend-core-
-
-      - name: Cache backend-realtime node_modules
-        uses: actions/cache@v4
-        with:
-          path: apps/backend-realtime/node_modules
-          key: backend-realtime-${{ hashFiles('apps/backend-realtime/package-lock.json') }}
-          restore-keys: backend-realtime-
-
-      - name: Configure AWS credentials (OIDC)
+      # Bước 2: Xác thực với tài khoản AWS thông qua Access Keys
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Bước 3: Đăng nhập vào hệ thống Amazon ECR
       - name: Login to Amazon ECR
-        id: ecr-login
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Get Google Client ID from Secrets Manager
-        id: get-google-client-id
-        run: |
-          CLIENT_ID=$(aws secretsmanager get-secret-value \
-            --secret-id "realtime-collab-staging/google-oauth" \
-            --query SecretString \
-            --region ${{ env.AWS_REGION }} \
-            --output text | jq -r '.clientId // ""')
-          if [ "$CLIENT_ID" = "CHANGE_ME" ]; then
-            CLIENT_ID=""
-          fi
-          echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Build & push Frontend image
+      # Bước 4: Biên dịch Docker image, gắn thẻ phiên bản và đẩy lên ECR
+      - name: Build, tag, and push image to Amazon ECR
         env:
-          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          IMAGE_URI="$REGISTRY/$ECR_REPO_FRONTEND"
-          docker build \
-            --tag "$IMAGE_URI:$IMAGE_TAG" \
-            --tag "$IMAGE_URI:latest" \
-            --cache-from "$IMAGE_URI:latest" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --build-arg VITE_API_BASE_URL=/ \
-            --build-arg VITE_WS_URL= \
-            --build-arg VITE_GOOGLE_CLIENT_ID="${{ steps.get-google-client-id.outputs.client_id }}" \
-            apps/frontend
-          docker push "$IMAGE_URI:$IMAGE_TAG"
-          docker push "$IMAGE_URI:latest"
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Build & push Core Backend image
-        env:
-          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+      # Bước 5: Yêu cầu Amazon ECS khởi chạy deployment mới (Kéo ảnh latest mới nhất về)
+      - name: Force New ECS Deployment
         run: |
-          IMAGE_URI="$REGISTRY/$ECR_REPO_CORE"
-          docker build \
-            --tag "$IMAGE_URI:$IMAGE_TAG" \
-            --tag "$IMAGE_URI:latest" \
-            --cache-from "$IMAGE_URI:latest" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            apps/backend-core
-          docker push "$IMAGE_URI:$IMAGE_TAG"
-          docker push "$IMAGE_URI:latest"
-
-      - name: Build & push Realtime Backend image
-        env:
-          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-        run: |
-          IMAGE_URI="$REGISTRY/$ECR_REPO_REALTIME"
-          docker build \
-            --tag "$IMAGE_URI:$IMAGE_TAG" \
-            --tag "$IMAGE_URI:latest" \
-            --cache-from "$IMAGE_URI:latest" \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            apps/backend-realtime
-          docker push "$IMAGE_URI:$IMAGE_TAG"
-          docker push "$IMAGE_URI:latest"
-
-# ─── Stage 2: Terraform apply ─────────────────────────────────────────────────
-  terraform-apply:
-    name: "Terraform – apply infrastructure"
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    permissions:
-      id-token: write
-      contents: read
-
-    defaults:
-      run:
-        working-directory: terraform
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Terraform ${{ env.TF_VERSION }}
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        run: terraform init -input=false
-
-      # ĐÃ BỔ SUNG ĐẦY ĐỦ CÁC BIẾN VÀ TAG LATEST
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan \
-            -input=false \
-            -var="environment=staging" \
-            -var="github_org=truongnhoxcon" \
-            -var="github_repo=Real-time-Streaming-Collaboration" \
-            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
-            -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
-            -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_FRONTEND }}:latest" \
-            -var="core_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_CORE }}:latest" \
-            -var="realtime_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_REALTIME }}:latest" \
-            -no-color \
-            -out=tfplan
-
-      - name: Terraform Apply
-        run: terraform apply -input=false -no-color tfplan
-
-# ─── Stage 3: ECS Rolling Update (Zero-Downtime Deployment) ──────────────────
-  ecs-deploy:
-    name: "ECS – rolling update"
-    runs-on: ubuntu-latest
-    needs: terraform-apply
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Force new deployment – Frontend
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE_FRONTEND" \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Force new deployment – Core Backend
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE_CORE" \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Force new deployment – Realtime Backend
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE_REALTIME" \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Wait – Frontend steady state
-        run: |
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE_FRONTEND"
-
-      - name: Wait – Core Backend steady state
-        run: |
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE_CORE"
-
-      - name: Wait – Realtime Backend steady state
-        run: |
-          # realtime-backend needs more time: Redis connect + Pub/Sub subscriber
-          # registration happen after the HTTP server is up. Poll for up to 20
-          # minutes (80 attempts × 15 s) to survive transient Redis delays.
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE_REALTIME" \
-            --cli-connect-timeout 20 \
-            --cli-read-timeout 900
-
-      - name: Deployment complete
-        run: |
-          echo "✅ All ECS services are stable."
-          echo "   Cluster  : $ECS_CLUSTER"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          # Look up the CloudFront distribution by comment tag — no checkout needed.
-          DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='${ECS_CLUSTER%-cluster}-staging-cloudfront'].Id | [0]" \
-            --output text 2>/dev/null || echo "")
-
-          # Fallback: find any distribution pointing to our ALB
-          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
-            DIST_ID=$(aws cloudfront list-distributions \
-              --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, 'elb.amazonaws.com')].Id | [0]" \
-              --output text 2>/dev/null || echo "")
-          fi
-
-          if [ -n "$DIST_ID" ] && [ "$DIST_ID" != "None" ]; then
-            echo "Invalidating CloudFront distribution: $DIST_ID"
-            aws cloudfront create-invalidation \
-              --distribution-id "$DIST_ID" \
-              --paths "/*" \
-              --no-cli-pager
-            echo "✅ CloudFront cache invalidated."
-          else
-            echo "⚠️  CloudFront distribution not found, skipping invalidation."
-          fi
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --force-new-deployment

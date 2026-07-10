@@ -42,51 +42,18 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
-  # Core Backend Service (REST API)
+  # Unified Backend Service (REST API & WebSockets)
   # ---------------------------------------------------------------------------
-  backend-core:
+  backend-unified:
     build:
-      context: ./apps/backend-core
+      context: ./apps/backend-unified
       dockerfile: Dockerfile
-    container_name: realtime_backend_core
+    container_name: realtime_backend_unified
     restart: always
     ports:
       - "3000:3000"
     environment:
       - PORT=3000
-      - NODE_ENV=production
-      # DB Connection (connecting to the postgres service hostname inside the bridge network)
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=realtime_collab
-      # Security Credentials
-      - JWT_SECRET=default_jwt_secret_change_me_in_production
-      # Mock credentials for local standalone execution of S3 & Twilio APIs
-      - AWS_REGION=us-east-1
-      - S3_BUCKET_NAME=realtime-collab-files-default
-      - TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
-      - TWILIO_AUTH_TOKEN=00000000000000000000000000000000
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - realtime-network
-
-  # ---------------------------------------------------------------------------
-  # Real-time Backend Service (WebSocket Engine)
-  # ---------------------------------------------------------------------------
-  backend-realtime:
-    build:
-      context: ./apps/backend-realtime
-      dockerfile: Dockerfile
-    container_name: realtime_backend_engine
-    restart: always
-    ports:
-      - "4000:4000"
-    environment:
-      - PORT=4000
       - NODE_ENV=production
       # DB Connection
       - DB_HOST=postgres
@@ -94,12 +61,15 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=realtime_collab
-      # Redis Connection (connecting to the redis service hostname inside the bridge network)
+      # Redis Connection
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_URL=redis://redis:6379
       # Security Credentials
       - JWT_SECRET=default_jwt_secret_change_me_in_production
+      # Mock credentials for local standalone execution of S3 & Twilio APIs
+      - AWS_REGION=us-east-1
+      - S3_BUCKET_NAME=realtime-collab-files-default
       - TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
       - TWILIO_AUTH_TOKEN=00000000000000000000000000000000
     depends_on:
@@ -122,8 +92,7 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend-core
-      - backend-realtime
+      - backend-unified
     networks:
       - realtime-network
 
