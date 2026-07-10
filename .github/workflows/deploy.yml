@@ -51,7 +51,7 @@ jobs:
   deploy-frontend:
     name: Build and Deploy Frontend
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
           aws s3 sync apps/frontend/dist/ s3://$FRONTEND_BUCKET/ --delete
 
           # 3. Tự động tìm CloudFront Distribution ID liên kết với S3 Bucket này
-          DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?contains(Origins.Items[0].DomainName, '$FRONTEND_BUCKET')].Id | [0]" --output text)
+          DIST_ID=$(aws cloudfront list-distributions --query "DistributionList.Items[?Origins.Items[?contains(DomainName, '$FRONTEND_BUCKET')]].Id | [0]" --output text)
           echo "Found CloudFront Distribution ID: $DIST_ID"
 
           # 4. Invalidate cache để cập nhật ngay lập tức giao diện mới
