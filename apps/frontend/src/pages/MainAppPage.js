@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Sparkles,
   LogOut,
+  Phone,
   Signal,
   X,
   ChevronRight,
@@ -97,7 +98,7 @@ const templates = [
 // DUMMY_FRIENDS removed for real API integration
 
 export default function MainAppPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateCurrentUserState } = useAuth();
   const {
     servers,
     activeServerId,
@@ -113,7 +114,8 @@ export default function MainAppPage() {
     fetchServers,
     socket,
     globalOnlineUserIds,
-    setGlobalOnlineUserIds
+    setGlobalOnlineUserIds,
+    voiceStates
   } = useChat();
 
   // Navigation / Collapse states
@@ -230,6 +232,10 @@ export default function MainAppPage() {
   const [ttsAllowed, setTtsAllowed] = useState(false);
   const [ttsSpeakMode, setTtsSpeakMode] = useState('never');
 
+  const [activeDM, setActiveDM] = useState(null);
+  const [dmMessages, setDmMessages] = useState([]);
+  const [dmInputText, setDmInputText] = useState('');
+
   const [statusText, setStatusText] = useState('');
   const [statusEmoji, setStatusEmoji] = useState('😊');
   const [clearAfter, setClearAfter] = useState('dont_clear');
@@ -246,6 +252,114 @@ export default function MainAppPage() {
       setTempClearAfter(clearAfter);
     }
   }, [isStatusModalOpen]);
+
+  useEffect(() => {
+    if (user && user.customStatus) {
+      const status = user.customStatus;
+      const emojis = ['😊', '🐱', '🎮', '🚀', '🎉', '🔥', '💻', '🍕', '❤️', '🤔', '👍', '✨', '💖'];
+      const foundEmoji = emojis.find(e => status.startsWith(e));
+      if (foundEmoji) {
+        setStatusEmoji(foundEmoji);
+        setStatusText(status.slice(foundEmoji.length).trim());
+      } else {
+        setStatusEmoji('');
+        setStatusText(status);
+      }
+    } else if (user) {
+      setStatusEmoji('');
+      setStatusText('');
+    }
+  }, [user]);
+
+  const activeDMRef = useRef(null);
+  const dmMessagesEndRef = useRef(null);
+
+  useEffect(() => {
+    activeDMRef.current = activeDM;
+  }, [activeDM]);
+
+  useEffect(() => {
+    if (activeDM) {
+      const fetchDMMessages = async () => {
+        try {
+          const response = await api.get(`/api/users/me/dms/${activeDM.dmUserId}/messages`);
+          if (response.data && response.data.messages) {
+            setDmMessages(response.data.messages);
+          }
+        } catch (err) {
+          console.error('[MainAppPage] Failed to fetch DM messages:', err);
+        }
+      };
+      fetchDMMessages();
+    } else {
+      setDmMessages([]);
+    }
+  }, [activeDM]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewDMMessage = (msg) => {
+      console.log('[WebSocket DM] Received message:', msg);
+      if (activeDMRef.current && 
+         ((msg.senderId === activeDMRef.current.dmUserId && msg.receiverId === user?.id) ||
+          (msg.senderId === user?.id && msg.receiverId === activeDMRef.current.dmUserId))) {
+        setDmMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          
+          if (msg.senderId === user?.id) {
+            const tempIndex = prev.findIndex(
+              (m) => m.id && m.id.toString().startsWith('temp-') && m.content === msg.content
+            );
+            if (tempIndex !== -1) {
+              const updated = [...prev];
+              updated[tempIndex] = msg;
+              return updated;
+            }
+          }
+          return [...prev, msg];
+        });
+      }
+    };
+
+    socket.on('dm_message', handleNewDMMessage);
+
+    return () => {
+      socket.off('dm_message', handleNewDMMessage);
+    };
+  }, [socket, user]);
+
+  useEffect(() => {
+    if (dmMessagesEndRef.current) {
+      dmMessagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [dmMessages]);
+
+  const handleSendDMMessage = (e) => {
+    e.preventDefault();
+    if (!dmInputText.trim() || !activeDM || !socket) return;
+
+    const content = dmInputText.trim();
+    setDmInputText('');
+
+    socket.emit('send_dm', {
+      receiverId: activeDM.dmUserId,
+      content,
+    });
+
+    const tempMessage = {
+      id: `temp-${Date.now()}`,
+      content,
+      createdAt: new Date().toISOString(),
+      senderId: user?.id,
+      receiverId: activeDM.dmUserId,
+      sender: {
+        id: user?.id,
+        username: user?.username || 'You',
+      },
+    };
+    setDmMessages((prev) => [...prev, tempMessage]);
+  };
 
   const [serverPrivacy, setServerPrivacy] = useState(true);
   const [friendRequests, setFriendRequests] = useState({
@@ -471,14 +585,22 @@ export default function MainAppPage() {
         setIsLoadingServers(true);
         try {
           const response = await api.get('/api/servers');
-          setJoinedServers(response.data);
-          if (response.data && response.data.length > 0) {
-            setSelectedServerId(response.data[0].id);
+          if (Array.isArray(response.data)) {
+            setJoinedServers(response.data);
+            if (response.data.length > 0) {
+              setSelectedServerId(response.data[0].id);
+            } else {
+              setSelectedServerId('');
+            }
           } else {
+            console.error('[MainAppPage] /api/servers returned non-array:', response.data);
+            setJoinedServers([]);
             setSelectedServerId('');
           }
         } catch (error) {
           console.error('[MainAppPage] Failed to fetch servers for profile tab:', error);
+          setJoinedServers([]);
+          setSelectedServerId('');
         } finally {
           setIsLoadingServers(false);
         }
@@ -685,9 +807,7 @@ export default function MainAppPage() {
 
   const handleMemberClick = (e, member) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const parentRect = e.currentTarget.offsetParent.getBoundingClientRect();
-    const relativeTop = rect.top - parentRect.top;
-    setPopoutTop(relativeTop);
+    setPopoutTop(rect.top);
     setSelectedMember(member);
   };
 
@@ -708,8 +828,187 @@ export default function MainAppPage() {
     if (activeServerId) {
       fetchServerMembers(activeServerId);
       setSelectedMember(null);
+      setActiveDM(null);
     }
   }, [activeServerId]);
+
+  const renderDMChat = () => {
+    if (!activeDM) return null;
+
+    const isDMOnline = globalOnlineUserIds.has(activeDM.dmUserId);
+
+    return (
+      <div className="flex-1 bg-[#313338] flex flex-col min-h-0 select-none h-full">
+        {/* Top Navbar */}
+        <header className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 flex-shrink-0 shadow-sm text-white select-none">
+          <div className="flex items-center gap-2 font-bold">
+            <span className="text-gray-400 text-lg">@</span>
+            <span className="text-gray-200">{activeDM.user?.username}</span>
+            <div className={`w-2.5 h-2.5 rounded-full ml-1
+              ${isDMOnline ? 'bg-green-500' : 'bg-gray-500'}`}
+            />
+            <span className="text-xs font-normal text-gray-400 ml-2">
+              {isDMOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4 text-gray-400">
+            <div className="flex items-center gap-1.5">
+              <button type="button" className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition" title="Start Voice Call">
+                <Phone className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition" title="Start Video Call">
+                <Video className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition" title="Pinned Messages">
+                <Pin className="w-5 h-5" />
+              </button>
+              <button type="button" className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition" title="Add Friends to DM">
+                <UserPlus className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mock Search Bar */}
+            <div className="relative bg-[#1E1F22] rounded flex items-center px-2 py-1 gap-1 text-xs">
+              <input
+                type="text"
+                placeholder="Search"
+                className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-36 focus:w-48 transition-all duration-150"
+              />
+              <Search className="w-4 h-4 text-gray-500" />
+            </div>
+            
+            <button type="button" className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition" title="Help">
+              <HelpCircle className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {/* Content columns */}
+        <div className="flex-1 flex min-h-0 min-w-0">
+          {/* Messages Column */}
+          <div className="flex-1 bg-[#313338] flex flex-col min-w-0 h-full">
+            {/* Scrollable Message List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+              <div className="mb-6 border-b border-gray-700/30 pb-6">
+                <div className="relative w-20 h-20 mb-4">
+                  <img
+                    src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${activeDM.user?.username}`}
+                    alt="Avatar"
+                    className="w-full h-full rounded-full bg-slate-800 object-cover"
+                  />
+                  <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#232428] flex items-center justify-center">
+                    <div className={`w-3.5 h-3.5 rounded-full ${isDMOnline ? 'bg-green-500' : 'bg-gray-500'}`} />
+                  </div>
+                </div>
+                <h1 className="text-3xl font-black text-white mb-1">
+                  {activeDM.user?.username}
+                </h1>
+                <p className="text-gray-400 text-sm">
+                  This is the start of your direct message history with {activeDM.user?.username}.
+                </p>
+              </div>
+
+              {/* Messages */}
+              {dmMessages.map((msg) => (
+                <div key={msg.id} className="flex gap-4 group hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition duration-100">
+                  <img
+                    src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.sender?.username || 'You'}`}
+                    alt="Avatar"
+                    className="w-10 h-10 rounded-full bg-slate-800 flex-shrink-0"
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold text-white hover:underline cursor-pointer">
+                        {msg.sender?.username || 'You'}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words">
+                      {msg.content}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div ref={dmMessagesEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            <form onSubmit={handleSendDMMessage} className="px-4 pb-6 flex-shrink-0">
+              <div className="bg-[#383A40] rounded-lg p-2.5 flex items-center gap-3">
+                <button
+                  type="button"
+                  className="p-1 text-gray-400 hover:text-gray-200 bg-[#4E5058] rounded-full hover:bg-gray-600 transition flex items-center justify-center"
+                >
+                  <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
+                </button>
+                <input
+                  type="text"
+                  value={dmInputText}
+                  onChange={(e) => setDmInputText(e.target.value)}
+                  placeholder={`Message @${activeDM.user?.username}`}
+                  className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1"
+                />
+                <div className="flex items-center gap-2 text-gray-400">
+                  <button type="button" className="p-1 hover:text-gray-200 transition">
+                    <Gift className="w-5 h-5" />
+                  </button>
+                  <button type="button" className="p-1 hover:text-gray-200 transition">
+                    <FileCode className="w-5 h-5" />
+                  </button>
+                  <button type="button" className="p-1 hover:text-gray-200 transition">
+                    <Smile className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* Profile Sidebar Panel */}
+          <aside className="w-[340px] bg-[#232428] border-l border-[#1E1F22] flex flex-col flex-shrink-0 overflow-y-auto no-scrollbar hidden md:flex">
+            {/* Banner */}
+            <div
+              className="h-[120px] w-full bg-[#5865F2]"
+            />
+
+            {/* Profile Content */}
+            <div className="relative px-4 pb-4">
+              {/* Avatar Box */}
+              <div className="w-[90px] h-[90px] rounded-full absolute -top-[45px] left-4 border-[6px] border-[#232428] bg-[#2B2D31]">
+                <img
+                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${activeDM.user?.username}`}
+                  alt="Avatar"
+                  className="w-full h-full rounded-full object-cover"
+                />
+                <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[#232428] flex items-center justify-center">
+                  <div className={`w-3.5 h-3.5 rounded-full ${isDMOnline ? 'bg-[#23A55A]' : 'bg-gray-500'}`} />
+                </div>
+              </div>
+
+              {/* Profile Details Box */}
+              <div className="bg-[#111214] mt-[55px] p-4 rounded-lg text-left">
+                <h3 className="text-xl font-bold text-white leading-tight truncate">
+                  {activeDM.user?.username}
+                </h3>
+                <div className="text-sm text-gray-400 mb-3">@{activeDM.user?.username}</div>
+
+                <div className="border-t border-[#2B2D31] my-3" />
+
+                <div>
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">About Me</h4>
+                  <p className="text-xs text-gray-300 leading-relaxed italic">
+                    No description provided.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  };
 
   const renderUserPopout = () => {
     if (!selectedMember) return null;
@@ -730,7 +1029,12 @@ export default function MainAppPage() {
           setIsVoiceExpanded(false);
           setIsNotificationsExpanded(false);
         }}
-        style={{ top: Math.max(10, Math.min(popoutTop, window.innerHeight - 500)) }}
+        onFriendRequestSent={fetchFriendsData}
+        style={{
+          position: 'fixed',
+          right: '248px',
+          top: `${Math.max(10, Math.min(popoutTop, window.innerHeight - 500))}px`
+        }}
       />
     );
   };
@@ -824,8 +1128,8 @@ export default function MainAppPage() {
   };
 
   // Active objects helper
-  const activeServer = servers.find(s => s.id === activeServerId) || null;
-  const activeChannel = channels.find(c => c.id === activeChannelId) || null;
+  const activeServer = Array.isArray(servers) ? (servers.find(s => s.id === activeServerId) || null) : null;
+  const activeChannel = Array.isArray(channels) ? (channels.find(c => c.id === activeChannelId) || null) : null;
 
   // Scroll to bottom when messages list changes
   useEffect(() => {
@@ -911,9 +1215,9 @@ export default function MainAppPage() {
       // Select the first text channel of the newly created server
       try {
         const updatedServerList = await api.get('/api/servers');
-        const newlyFetchedServer = updatedServerList.data.find(s => s.id === createdServer.id);
+        const newlyFetchedServer = Array.isArray(updatedServerList?.data) ? updatedServerList.data.find(s => s.id === createdServer.id) : null;
         if (newlyFetchedServer) {
-          const textChan = newlyFetchedServer.channels?.find(c => c.type === 'text');
+          const textChan = Array.isArray(newlyFetchedServer.channels) ? newlyFetchedServer.channels.find(c => c.type === 'text') : null;
           if (textChan) {
             setActiveChannelId(textChan.id);
           } else {
@@ -955,9 +1259,9 @@ export default function MainAppPage() {
       // Select its first text channel if any
       try {
         const updatedServerList = await api.get('/api/servers');
-        const newlyFetchedServer = updatedServerList.data.find(s => s.id === joinedServer.id);
+        const newlyFetchedServer = Array.isArray(updatedServerList?.data) ? updatedServerList.data.find(s => s.id === joinedServer.id) : null;
         if (newlyFetchedServer) {
-          const textChan = newlyFetchedServer.channels?.find(c => c.type === 'text');
+          const textChan = Array.isArray(newlyFetchedServer.channels) ? newlyFetchedServer.channels.find(c => c.type === 'text') : null;
           if (textChan) {
             setActiveChannelId(textChan.id);
           } else {
@@ -1004,6 +1308,7 @@ export default function MainAppPage() {
             onClick={() => {
               setActiveServerId(null);
               setActiveChannelId(null);
+              setActiveDM(null);
             }}
             className="w-12 h-12 rounded-2xl bg-[#5865F2] text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200"
           >
@@ -1019,7 +1324,7 @@ export default function MainAppPage() {
 
         {/* Dynamic Server List */}
         <div className="flex-1 w-full flex flex-col gap-2 overflow-y-auto no-scrollbar">
-          {servers.map((server) => {
+          {Array.isArray(servers) && servers.map((server) => {
             const isActive = server.id === activeServerId;
             return (
               <div key={server.id} className="relative group flex items-center justify-center w-full">
@@ -1029,7 +1334,7 @@ export default function MainAppPage() {
                 <button
                   onClick={() => {
                     setActiveServerId(server.id);
-                    const firstChan = server.channels?.find(c => c.type === 'text');
+                    const firstChan = Array.isArray(server.channels) ? server.channels.find(c => c.type === 'text') : null;
                     if (firstChan) {
                       setActiveChannelId(firstChan.id);
                     } else {
@@ -1227,25 +1532,48 @@ export default function MainAppPage() {
                       .filter(c => c.type === 'voice')
                       .map(c => {
                         const isConnected = c.id === connectedVoiceId;
+                        const channelUsers = voiceStates[c.id] || [];
+
                         return (
-                          <button
-                            key={c.id}
-                            onClick={() => handleVoiceChannelClick(c.id)}
-                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm font-medium transition group
-                              ${isConnected
-                                ? 'bg-[#3F4147] text-emerald-400'
-                                : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
-                          >
-                            <div className="flex items-center gap-1.5 truncate">
-                              <Volume2 className={`w-5 h-5 flex-shrink-0 ${isConnected ? 'text-emerald-400' : 'text-gray-400'}`} />
-                              <span className="truncate">{c.name}</span>
+                          <div key={c.id} className="w-full flex flex-col">
+                            {/* Channel Header Item */}
+                            <div
+                              onClick={() => handleVoiceChannelClick(c.id)}
+                              className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm font-medium transition group cursor-pointer
+                                ${isConnected
+                                  ? 'bg-[#3F4147] text-emerald-400'
+                                  : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Volume2 className={`w-5 h-5 flex-shrink-0 ${isConnected ? 'text-emerald-400' : 'text-gray-400'}`} />
+                                <span className="truncate">{c.name}</span>
+                              </div>
+                              {isConnected && (
+                                <span className="text-xs bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-400">
+                                  Active
+                                </span>
+                              )}
                             </div>
-                            {isConnected && (
-                              <span className="text-xs bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-400">
-                                Active
-                              </span>
+
+                            {/* Channel Users List (Indented) */}
+                            {channelUsers.length > 0 && (
+                              <div className="pl-6 pr-2 py-1.5 space-y-1">
+                                {channelUsers.map((voiceUser) => (
+                                  <div
+                                    key={voiceUser.userId}
+                                    className="flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white py-0.5"
+                                  >
+                                    <img
+                                      src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${voiceUser.username}`}
+                                      alt="Avatar"
+                                      className="w-5 h-5 rounded-full bg-slate-800 flex-shrink-0"
+                                    />
+                                    <span className="truncate select-none">{voiceUser.username}</span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })
                     }
@@ -1263,7 +1591,7 @@ export default function MainAppPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 truncate">
-                    {channels.find(c => c.id === connectedVoiceId)?.name} / {activeServer.name}
+                    {Array.isArray(channels) ? channels.find(c => c.id === connectedVoiceId)?.name : null} / {activeServer?.name}
                   </span>
                   <button
                     onClick={() => {
@@ -1293,9 +1621,12 @@ export default function MainAppPage() {
             {/* DM Top Menu & DM List */}
             <div className="flex-1 overflow-y-auto pt-3 px-2 space-y-[2px] no-scrollbar">
               <button
-                onClick={() => setActiveTab('online')}
+                onClick={() => {
+                  setActiveTab('online');
+                  setActiveDM(null);
+                }}
                 className={`w-full flex items-center gap-4 px-3 py-2 rounded text-sm font-semibold transition group text-left
-                  ${activeTab !== 'add-friend' ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
+                  ${activeTab !== 'add-friend' && !activeDM ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
               >
                 <Users className="w-5 h-5 flex-shrink-0" />
                 <span>Friends</span>
@@ -1326,7 +1657,15 @@ export default function MainAppPage() {
                   dms.map((dm) => (
                     <div
                       key={dm.id}
-                      className="w-full flex items-center justify-between px-3 py-1.5 rounded text-sm font-semibold transition text-gray-400 hover:bg-[#35373C] hover:text-gray-200 group cursor-pointer"
+                      onClick={() => {
+                        setActiveServerId(null);
+                        setActiveChannelId(null);
+                        setActiveDM(dm);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded text-sm font-semibold transition group cursor-pointer
+                        ${activeDM && activeDM.id === dm.id
+                          ? 'bg-[#3F4147] text-white'
+                          : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
@@ -1340,6 +1679,9 @@ export default function MainAppPage() {
                         onClick={(e) => {
                           e.stopPropagation();
                           handleHideDM(dm.dmUserId);
+                          if (activeDM && activeDM.dmUserId === dm.dmUserId) {
+                            setActiveDM(null);
+                          }
                         }}
                         className="text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
                       >
@@ -1669,6 +2011,8 @@ export default function MainAppPage() {
             )}
           </main>
         )
+      ) : activeDM ? (
+        renderDMChat()
       ) : (
         // Friends Page Content
         <main className="flex-1 bg-[#313338] flex flex-col min-w-0">
@@ -1937,7 +2281,14 @@ export default function MainAppPage() {
                                     try {
                                       await api.post('/api/users/me/dms', { dmUserId: friend.id });
                                       fetchDMs();
-                                      alert(`Opening DM conversation with ${friend.username}`);
+                                      setActiveDM({
+                                        id: `temp-${friend.id}`,
+                                        dmUserId: friend.id,
+                                        user: {
+                                          id: friend.id,
+                                          username: friend.username
+                                        }
+                                      });
                                     } catch (err) {
                                       console.error('Failed to open DM:', err);
                                     }
@@ -2033,6 +2384,8 @@ export default function MainAppPage() {
             </aside>
           );
         })()
+      ) : activeDM ? (
+        null
       ) : (
         // Active Now Sidebar for Home tab
         <aside className="w-[360px] bg-[#2B2D31] border-l border-[#1E1F22] flex flex-col flex-shrink-0 p-4 overflow-y-auto select-none hidden lg:flex">
@@ -3040,7 +3393,7 @@ export default function MainAppPage() {
                       </div>
 
                       {(() => {
-                        const selectedServerName = joinedServers.find(s => s.id === selectedServerId)?.name || '';
+                        const selectedServerName = Array.isArray(joinedServers) ? (joinedServers.find(s => s.id === selectedServerId)?.name || '') : '';
 
                         const activePreviewName = profileTab === 'server' && serverNickname.trim()
                           ? serverNickname
@@ -4437,11 +4790,23 @@ export default function MainAppPage() {
             <div className="bg-[#2B2D31] p-4 flex justify-end items-center rounded-b-xl border-t border-gray-950/40">
               <button
                 type="button"
-                onClick={() => {
-                  setStatusText(tempStatusText);
-                  setStatusEmoji(tempStatusEmoji);
-                  setClearAfter(tempClearAfter);
-                  setIsStatusModalOpen(false);
+                onClick={async () => {
+                  try {
+                    const statusVal = tempStatusEmoji ? `${tempStatusEmoji} ${tempStatusText}` : tempStatusText;
+                    await api.patch('/api/users/me', { customStatus: statusVal });
+                    setStatusText(tempStatusText);
+                    setStatusEmoji(tempStatusEmoji);
+                    setClearAfter(tempClearAfter);
+                    setIsStatusModalOpen(false);
+                    if (user) {
+                      updateCurrentUserState({
+                        ...user,
+                        customStatus: statusVal
+                      });
+                    }
+                  } catch (err) {
+                    console.error('Failed to update custom status on backend:', err);
+                  }
                 }}
                 className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-6 py-2 rounded font-medium text-sm transition"
               >

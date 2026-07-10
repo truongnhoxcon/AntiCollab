@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.js';
 import api, { API_BASE_URL } from '../services/api.js';
 import { UserPlus, MoreHorizontal } from 'lucide-react';
 
-export default function UserPopout({ userId, serverId, onClose, onEditProfile, isOnline, style }) {
+export default function UserPopout({ userId, serverId, onClose, onEditProfile, isOnline, style, onFriendRequestSent }) {
   const { user } = useAuth();
   const currentUser = user;
   const isSelf = currentUser?.id === userId;
@@ -11,8 +11,25 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
   const [userData, setUserData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [friendRequestStatus, setFriendRequestStatus] = useState(null);
 
   const popoutRef = useRef(null);
+
+  const handleAddFriend = async () => {
+    setFriendRequestStatus('sending');
+    try {
+      await api.post('/api/friends/request', { username: userData.username });
+      setFriendRequestStatus('sent');
+      if (onFriendRequestSent) {
+        onFriendRequestSent();
+      }
+    } catch (err) {
+      console.error('[UserPopout] Failed to send friend request:', err);
+      const errMsg = err.response?.data?.error || 'Failed to send friend request.';
+      alert(errMsg);
+      setFriendRequestStatus('error');
+    }
+  };
 
   // Click outside to close listener
   useEffect(() => {
@@ -116,6 +133,18 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
     ? getFullAvatarUrl(userData.avatarUrl)
     : `https://api.dicebear.com/7.x/pixel-art/svg?seed=${userData.username}`;
 
+  let statusEmoji = '';
+  let statusText = userData.customStatus || '';
+
+  if (userData.customStatus) {
+    const emojis = ['😊', '🐱', '🎮', '🚀', '🎉', '🔥', '💻', '🍕', '❤️', '🤔', '👍', '✨', '💖'];
+    const foundEmoji = emojis.find(e => userData.customStatus.startsWith(e));
+    if (foundEmoji) {
+      statusEmoji = foundEmoji;
+      statusText = userData.customStatus.slice(foundEmoji.length).trim();
+    }
+  }
+
   return (
     <div
       ref={popoutRef}
@@ -133,9 +162,15 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
         {!isSelf && (
           <div className="absolute top-3 right-3 flex gap-2">
             <button
-              onClick={() => alert(`Added ${userData.displayName} as friend!`)}
-              className="bg-black/40 text-white p-1.5 rounded-md hover:bg-black/60 transition"
-              title="Add Friend"
+              onClick={handleAddFriend}
+              disabled={friendRequestStatus === 'sent' || friendRequestStatus === 'sending'}
+              className={`p-1.5 rounded-md transition text-white
+                ${friendRequestStatus === 'sent' 
+                  ? 'bg-green-600 cursor-not-allowed' 
+                  : friendRequestStatus === 'sending'
+                    ? 'bg-gray-600 cursor-wait'
+                    : 'bg-black/40 hover:bg-black/60'}`}
+              title={friendRequestStatus === 'sent' ? 'Friend Request Sent' : 'Add Friend'}
             >
               <UserPlus className="w-4 h-4" />
             </button>
@@ -150,7 +185,7 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
         )}
 
         {/* Avatar Container */}
-        <div className="absolute top-[75px] left-4 w-20 h-20 rounded-full border-[6px] border-[#232428] bg-[#232428] relative">
+        <div className="absolute top-[75px] left-4 w-20 h-20 rounded-full border-[6px] border-[#232428] bg-[#232428]">
           <img
             src={avatarSrc}
             alt={userData.username}
@@ -166,13 +201,14 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
         {/* Custom Status Bubble overlapping avatar */}
         {userData.customStatus && (
           <div className="absolute top-[58px] left-[84px] z-20 max-w-[150px]">
-            <div className="bg-[#111214] border-[3px] border-[#232428] rounded-xl px-2.5 py-1 flex items-center justify-center gap-1.5 shadow-md relative text-xs">
+            <div className="bg-[#111214] border-[3px] border-[#232428] rounded-xl px-2.5 py-1.5 flex items-start gap-1.5 shadow-md relative text-xs">
               {/* Little Tail fill / border */}
               <div className="absolute left-[-8px] top-[7px] w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#232428] z-0" />
               <div className="absolute left-[-5px] top-[8px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-[#111214] z-10" />
               
-              <span className="text-white truncate block select-text">
-                {userData.customStatus}
+              {statusEmoji && <span className="text-xs flex-shrink-0 mt-0.5 z-10">{statusEmoji}</span>}
+              <span className="text-xs text-white truncate block max-w-[90px] select-text z-10">
+                {statusText}
               </span>
             </div>
           </div>
@@ -180,7 +216,7 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
       </div>
 
       {/* Details Box Section */}
-      <div className="bg-[#111214] m-4 mt-[55px] p-3 rounded-lg flex flex-col text-left">
+      <div className="bg-[#111214] m-4 mt-[50px] p-4 rounded-lg flex flex-col text-left">
         <h3 className="text-xl font-bold text-white leading-tight truncate select-all">
           {userData.displayName}
         </h3>
@@ -191,9 +227,6 @@ export default function UserPopout({ userId, serverId, onClose, onEditProfile, i
         {/* About Me */}
         {userData.aboutMe && (
           <div>
-            <h4 className="text-xs font-bold text-gray-400 uppercase mb-1 select-none">
-              About Me
-            </h4>
             <p className="text-sm text-gray-300 whitespace-pre-wrap select-text leading-normal">
               {userData.aboutMe}
             </p>
