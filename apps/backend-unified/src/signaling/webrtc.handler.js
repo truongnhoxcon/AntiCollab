@@ -83,21 +83,23 @@ function registerWebRTCHandler(io, socket) {
   });
 
   // Event: Forward WebRTC Offer to target peer
-  socket.on('webrtc_offer', ({ targetSocketId, offer }) => {
-    console.log(`[WebRTC Backend] Forwarding offer from ${socket.id} to ${targetSocketId}`);
+  socket.on('webrtc_offer', ({ targetSocketId, offer, isCameraOff }) => {
+    console.log(`[WebRTC Backend] Forwarding offer from ${socket.id} to ${targetSocketId} (camera off: ${isCameraOff})`);
     socket.to(targetSocketId).emit('webrtc_offer', {
       senderSocketId: socket.id,
       offer,
-      senderUsername: socket.user?.username || 'Unknown User'
+      senderUsername: socket.user?.username || 'Unknown User',
+      isCameraOff
     });
   });
 
   // Event: Forward WebRTC Answer to target peer
-  socket.on('webrtc_answer', ({ targetSocketId, answer }) => {
-    console.log(`[WebRTC Backend] Forwarding answer from ${socket.id} to ${targetSocketId}`);
+  socket.on('webrtc_answer', ({ targetSocketId, answer, isCameraOff }) => {
+    console.log(`[WebRTC Backend] Forwarding answer from ${socket.id} to ${targetSocketId} (camera off: ${isCameraOff})`);
     socket.to(targetSocketId).emit('webrtc_answer', {
       senderSocketId: socket.id,
-      answer
+      answer,
+      isCameraOff
     });
   });
 
@@ -107,6 +109,16 @@ function registerWebRTCHandler(io, socket) {
     socket.to(targetSocketId).emit('webrtc_ice_candidate', {
       senderSocketId: socket.id,
       candidate
+    });
+  });
+
+  // Event: Broadcast Camera State Update
+  socket.on('update_camera_state', ({ channelId, isCameraOff }) => {
+    const roomName = `voice:${channelId}`;
+    console.log(`[WebRTC Backend] User ${socket.user?.username} (${socket.id}) updated camera state: off = ${isCameraOff}`);
+    socket.to(roomName).emit('user_camera_updated', {
+      socketId: socket.id,
+      isCameraOff
     });
   });
 

@@ -8,12 +8,16 @@ import { useEffect, useRef, useState } from 'react';
  * @param {string|null} channelId - The active voice channel ID
  * @returns {Object} WebRTC states and utility functions
  */
-export const useWebRTC = (socket, channelId) => {
+export const useWebRTC = (socket, channelId, options = {}) => {
+  const { inputMode = 'activity', pttKey = 'CapsLock', localUsername } = options;
   const [localStream, setLocalStream] = useState(null);
   const [remoteStreams, setRemoteStreams] = useState({}); // format: { [socketId]: MediaStream }
   const [peersInfo, setPeersInfo] = useState({}); // format: { [socketId]: username }
   const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(() => {
+    return localStorage.getItem('voice_camera_off') === 'true';
+  });
+  const [remoteCameraStates, setRemoteCameraStates] = useState({}); // format: { [socketId]: boolean }
 
   const peersRef = useRef({}); // format: { [socketId]: RTCPeerConnection }
   const iceCandidatesQueueRef = useRef({}); // format: { [socketId]: [RTCIceCandidate] }
@@ -132,6 +136,11 @@ export const useWebRTC = (socket, channelId) => {
       delete updated[peerSocketId];
       return updated;
     });
+    setRemoteCameraStates((prev) => {
+      const updated = { ...prev };
+      delete updated[peerSocketId];
+      return updated;
+    });
   };
 
   // Setup media and join voice room
@@ -156,15 +165,35 @@ export const useWebRTC = (socket, channelId) => {
         }
 
         console.log('[WebRTC] Requesting local camera/microphone media permissions...');
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
+        const savedMic = localStorage.getItem('voice_selected_mic');
+        const savedCamera = localStorage.getItem('voice_selected_camera');
+
+        const constraints = {
+          audio: savedMic ? { deviceId: { ideal: savedMic } } : true,
+          video: savedCamera ? { deviceId: { ideal: savedCamera } } : true,
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        // Apply remembered camera state
+        const rememberedCameraOff = localStorage.getItem('voice_camera_off') === 'true';
+        stream.getVideoTracks().forEach((track) => {
+          track.enabled = !rememberedCameraOff;
         });
 
         setLocalStream(stream);
         localStreamRef.current = stream;
-        setIsMuted(false);
-        setIsCameraOff(false);
+
+        // Apply initial input mode mute state
+        if (inputMode === 'push') {
+          stream.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+          setIsMuted(true);
+        } else {
+          setIsMuted(false);
+        }
+
+        setIsCameraOff(rememberedCameraOff);
 
         // Tell signaling server we are entering the voice room
         console.log(`[WebRTC] Emitting join_voice_channel for room ${channelId}`);
@@ -209,6 +238,7 @@ export const useWebRTC = (socket, channelId) => {
           socket.emit('webrtc_offer', {
             targetSocketId: peerSocketId,
             offer,
+            isCameraOff: localStreamRef.current ? localStreamRef.current.getVideoTracks().every(t => !t.enabled) : true
           });
         } catch (error) {
           console.error(`[WebRTC] Failed to send Offer to ${peerSocketId}:`, error);
@@ -226,13 +256,16 @@ export const useWebRTC = (socket, channelId) => {
       // Wait for their Offer
     };
 
-    const handleWebRTCOffer = async ({ senderSocketId, offer, senderUsername }) => {
-      console.log(`[WebRTC Socket] Received Offer from ${senderSocketId}`);
+    const handleWebRTCOffer = async ({ senderSocketId, offer, senderUsername, isCameraOff }) => {
+      console.log(`[WebRTC Socket] Received Offer from ${senderSocketId}, camera off: ${isCameraOff}`);
       if (senderUsername) {
         setPeersInfo((prev) => ({
           ...prev,
           [senderSocketId]: senderUsername,
         }));
+      }
+      if (isCameraOff !== undefined) {
+        setRemoteCameraStates((prev) => ({ ...prev, [senderSocketId]: isCameraOff }));
       }
 
       try {
@@ -249,14 +282,18 @@ export const useWebRTC = (socket, channelId) => {
         socket.emit('webrtc_answer', {
           targetSocketId: senderSocketId,
           answer,
+          isCameraOff: localStreamRef.current ? localStreamRef.current.getVideoTracks().every(t => !t.enabled) : true
         });
       } catch (error) {
         console.error(`[WebRTC] Failed to respond to Offer from ${senderSocketId}:`, error);
       }
     };
 
-    const handleWebRTCAnswer = async ({ senderSocketId, answer }) => {
-      console.log(`[WebRTC Socket] Received Answer from ${senderSocketId}`);
+    const handleWebRTCAnswer = async ({ senderSocketId, answer, isCameraOff }) => {
+      console.log(`[WebRTC Socket] Received Answer from ${senderSocketId}, camera off: ${isCameraOff}`);
+      if (isCameraOff !== undefined) {
+        setRemoteCameraStates((prev) => ({ ...prev, [senderSocketId]: isCameraOff }));
+      }
       try {
         const pc = peersRef.current[senderSocketId];
         if (pc) {
@@ -303,6 +340,13 @@ export const useWebRTC = (socket, channelId) => {
     socket.on('webrtc_ice_candidate', handleWebRTCIceCandidate);
     socket.on('user_left_voice', handleUserLeftVoice);
 
+    const handleUserCameraUpdated = ({ socketId, isCameraOff }) => {
+      console.log(`[WebRTC Socket] user_camera_updated: Peer ${socketId} camera off = ${isCameraOff}`);
+      setRemoteCameraStates((prev) => ({ ...prev, [socketId]: isCameraOff }));
+    };
+
+    socket.on('user_camera_updated', handleUserCameraUpdated);
+
     return () => {
       socket.off('get_current_voice_users', handleGetCurrentUsers);
       socket.off('user_joined_voice', handleUserJoinedVoice);
@@ -310,8 +354,83 @@ export const useWebRTC = (socket, channelId) => {
       socket.off('webrtc_answer', handleWebRTCAnswer);
       socket.off('webrtc_ice_candidate', handleWebRTCIceCandidate);
       socket.off('user_left_voice', handleUserLeftVoice);
+      socket.off('user_camera_updated', handleUserCameraUpdated);
+
+      // Clean up previous voice session completely when channelId changes or unmounts
+      cleanupAll();
     };
   }, [socket, channelId]);
+
+  // Sync mic track state when inputMode changes dynamically
+  useEffect(() => {
+    if (localStreamRef.current) {
+      const audioTracks = localStreamRef.current.getAudioTracks();
+      if (inputMode === 'push') {
+        audioTracks.forEach((track) => {
+          track.enabled = false;
+        });
+        setIsMuted(true);
+      } else {
+        audioTracks.forEach((track) => {
+          track.enabled = true;
+        });
+        setIsMuted(false);
+      }
+    }
+  }, [inputMode]);
+
+  // Global window key listeners for Push to Talk
+  useEffect(() => {
+    if (!channelId || inputMode !== 'push' || !socket) return;
+
+    let isPressed = false;
+
+    const handleKeyDown = (e) => {
+      if (e.key === pttKey) {
+        if (pttKey === 'CapsLock' || pttKey === ' ') {
+          e.preventDefault();
+        }
+        if (!isPressed) {
+          isPressed = true;
+          console.log('[WebRTC PTT] Speaking...');
+          if (localStreamRef.current) {
+            localStreamRef.current.getAudioTracks().forEach((track) => {
+              track.enabled = true;
+            });
+          }
+          setIsMuted(false);
+        }
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.key === pttKey) {
+        isPressed = false;
+        console.log('[WebRTC PTT] Muted...');
+        if (localStreamRef.current) {
+          localStreamRef.current.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+        }
+        setIsMuted(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      // Restore mic track if inputMode changes or unmounts
+      if (localStreamRef.current) {
+        localStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+      }
+      setIsMuted(false);
+    };
+  }, [socket, channelId, inputMode, pttKey]);
 
   // General teardown function
   const cleanupAll = () => {
@@ -339,6 +458,7 @@ export const useWebRTC = (socket, channelId) => {
     setLocalStream(null);
     setRemoteStreams({});
     setPeersInfo({});
+    setRemoteCameraStates({});
     setIsMuted(false);
     setIsCameraOff(false);
   };
@@ -368,7 +488,16 @@ export const useWebRTC = (socket, channelId) => {
       videoTracks.forEach((track) => {
         track.enabled = !track.enabled;
       });
-      setIsCameraOff(!videoTracks[0]?.enabled);
+      const nextState = !videoTracks[0]?.enabled;
+      setIsCameraOff(nextState);
+      localStorage.setItem('voice_camera_off', nextState ? 'true' : 'false');
+
+      if (socketRef.current && channelIdRef.current) {
+        socketRef.current.emit('update_camera_state', {
+          channelId: channelIdRef.current,
+          isCameraOff: nextState,
+        });
+      }
     }
   };
 
@@ -376,10 +505,152 @@ export const useWebRTC = (socket, channelId) => {
     cleanupAll();
   };
 
+  const [speakingUsers, setSpeakingUsers] = useState({});
+  const audioContextRef = useRef(null);
+  const analysersRef = useRef({}); // maps username -> { analyser, source, stream }
+
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
+  const setupAudioAnalyser = (username, stream) => {
+    try {
+      if (!stream || stream.getAudioTracks().length === 0) return;
+      
+      const ctx = getAudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      analysersRef.current[username] = {
+        analyser,
+        source,
+        stream
+      };
+      console.log(`[WebRTC] Audio analyser setup complete for: ${username}`);
+    } catch (err) {
+      console.error(`Failed to setup audio analyser for ${username}:`, err);
+    }
+  };
+
+  const removeAudioAnalyser = (username) => {
+    const entry = analysersRef.current[username];
+    if (entry) {
+      try {
+        entry.source.disconnect();
+      } catch (err) {}
+      delete analysersRef.current[username];
+      console.log(`[WebRTC] Audio analyser removed for: ${username}`);
+    }
+  };
+
+  // Periodically check who is speaking
+  useEffect(() => {
+    if (!channelId || !socket) {
+      setSpeakingUsers({});
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const currentSpeaking = {};
+      const threshold = 8; // average volume threshold
+
+      // 1. Analyze local stream
+      if (localStreamRef.current && localUsername) {
+        const username = localUsername;
+        let entry = analysersRef.current[username];
+        if (!entry || entry.stream !== localStreamRef.current) {
+          if (entry) removeAudioAnalyser(username);
+          setupAudioAnalyser(username, localStreamRef.current);
+          entry = analysersRef.current[username];
+        }
+
+        if (entry && entry.analyser) {
+          const bufferLength = entry.analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          entry.analyser.getByteFrequencyData(dataArray);
+          
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / bufferLength;
+          const isSpeaking = average > threshold;
+          if (isSpeaking) {
+            currentSpeaking[username] = true;
+          }
+        }
+      }
+
+      // 2. Analyze remote streams
+      Object.keys(remoteStreams).forEach((peerSocketId) => {
+        const username = peersInfo[peerSocketId];
+        const stream = remoteStreams[peerSocketId];
+        if (username && stream) {
+          let entry = analysersRef.current[username];
+          if (!entry || entry.stream !== stream) {
+            if (entry) removeAudioAnalyser(username);
+            setupAudioAnalyser(username, stream);
+            entry = analysersRef.current[username];
+          }
+
+          if (entry && entry.analyser) {
+            const bufferLength = entry.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            entry.analyser.getByteFrequencyData(dataArray);
+            
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += dataArray[i];
+            }
+            const average = sum / bufferLength;
+            const isSpeaking = average > threshold;
+            if (isSpeaking) {
+              currentSpeaking[username] = true;
+            }
+          }
+        }
+      });
+
+      // Cleanup analysers for users that left
+      const currentUsers = new Set();
+      if (localUsername) currentUsers.add(localUsername);
+      Object.keys(remoteStreams).forEach((peerSocketId) => {
+        const username = peersInfo[peerSocketId];
+        if (username) currentUsers.add(username);
+      });
+
+      Object.keys(analysersRef.current).forEach((username) => {
+        if (!currentUsers.has(username)) {
+          removeAudioAnalyser(username);
+        }
+      });
+
+      setSpeakingUsers(currentSpeaking);
+    }, 100);
+
+    return () => {
+      clearInterval(interval);
+      Object.keys(analysersRef.current).forEach((username) => {
+        removeAudioAnalyser(username);
+      });
+      setSpeakingUsers({});
+    };
+  }, [channelId, socket, remoteStreams, peersInfo, localUsername]);
+
   return {
     localStream,
     remoteStreams,
     peersInfo,
+    remoteCameraStates,
+    speakingUsers,
     isMuted,
     isCameraOff,
     toggleMic,

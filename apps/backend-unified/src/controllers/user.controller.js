@@ -448,6 +448,22 @@ async function sendDMMessageAPI(req, res) {
 
     const dbMessage = result.rows[0];
 
+    // Ensure DM conversation is active in user_dms for both sender and receiver
+    await db.query(
+      `INSERT INTO user_dms (user_id, dm_user_id, active) 
+       VALUES ($1, $2, TRUE) 
+       ON CONFLICT (user_id, dm_user_id) 
+       DO UPDATE SET active = TRUE`,
+      [userId, dmUserId]
+    );
+    await db.query(
+      `INSERT INTO user_dms (user_id, dm_user_id, active) 
+       VALUES ($1, $2, TRUE) 
+       ON CONFLICT (user_id, dm_user_id) 
+       DO UPDATE SET active = TRUE`,
+      [dmUserId, userId]
+    );
+
     return res.status(201).json({
       success: true,
       message: {
