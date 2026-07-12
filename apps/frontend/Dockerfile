@@ -17,6 +17,10 @@ COPY . .
 ARG VITE_API_BASE_URL
 ARG VITE_WS_URL
 ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_COGNITO_USER_POOL_ID
+ARG VITE_COGNITO_CLIENT_ID
+ARG VITE_COGNITO_REGION
+
 RUN if [ -n "$VITE_API_BASE_URL" ]; then \
       echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" > .env.production; \
     fi && \
@@ -25,6 +29,15 @@ RUN if [ -n "$VITE_API_BASE_URL" ]; then \
     fi && \
     if [ -n "$VITE_GOOGLE_CLIENT_ID" ]; then \
       echo "VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID" >> .env.production; \
+    fi && \
+    if [ -n "$VITE_COGNITO_USER_POOL_ID" ]; then \
+      echo "VITE_COGNITO_USER_POOL_ID=$VITE_COGNITO_USER_POOL_ID" >> .env.production; \
+    fi && \
+    if [ -n "$VITE_COGNITO_CLIENT_ID" ]; then \
+      echo "VITE_COGNITO_CLIENT_ID=$VITE_COGNITO_CLIENT_ID" >> .env.production; \
+    fi && \
+    if [ -n "$VITE_COGNITO_REGION" ]; then \
+      echo "VITE_COGNITO_REGION=$VITE_COGNITO_REGION" >> .env.production; \
     fi
 
 # Build the production bundle (Vite reads .env.production automatically)
