@@ -1,7 +1,26 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../services/api.js';
+import { CognitoUserPool, CognitoUser, AuthenticationDetails, CognitoUserAttribute } from 'amazon-cognito-identity-js';
 
 const AuthContext = createContext(null);
+
+const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID;
+const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
+
+let userPool = null;
+if (userPoolId && clientId) {
+  try {
+    userPool = new CognitoUserPool({
+      UserPoolId: userPoolId,
+      ClientId: clientId,
+    });
+    console.log(`[AuthContext] AWS Cognito initialized. User Pool: ${userPoolId}`);
+  } catch (err) {
+    console.error("[AuthContext] Failed to initialize Cognito User Pool:", err);
+  }
+} else {
+  console.log("[AuthContext] Cognito environment variables missing. Falling back to local backend authentication API.");
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -31,6 +50,10 @@ export const AuthProvider = ({ children }) => {
             }
           } catch (apiErr) {
             console.error('Failed to sync user session with backend:', apiErr);
+            // If the token is invalid/expired on the server, sign out
+            if (apiErr.response && apiErr.response.status === 401) {
+              logout();
+            }
           }
         }
       } catch (e) {
@@ -54,26 +77,70 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Handle user login.
-   * Calls POST /api/auth/login
+   * Calls Cognito authenticateUser OR fallback local login POST /api/auth/login
    */
   const login = async (email, password) => {
-    try {
-      const response = await api.post('/api/auth/login', { email, password });
-      const { token: receivedToken, user: receivedUser } = response.data;
+    if (userPool) {
+      return new Promise((resolve) => {
+        const authDetails = new AuthenticationDetails({ Username: email, Password: password });
+        const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
 
-      localStorage.setItem('token', receivedToken);
-      localStorage.setItem('user', JSON.stringify(receivedUser));
+        cognitoUser.authenticateUser(authDetails, {
+          onSuccess: async (session) => {
+            const idToken = session.getIdToken().getJwtToken();
 
-      setToken(receivedToken);
-      setUser(receivedUser);
-      setIsAuthenticated(true);
+            try {
+              // Sync user with local PostgreSQL database
+              const response = await api.get('/api/users/me', {
+                headers: { Authorization: `Bearer ${idToken}` }
+              });
 
-      // Redirect to the main application
-      window.location.hash = '#app';
-      return { success: true };
-    } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Invalid credentials or connection issue';
-      return { success: false, error: errorMsg };
+              if (response.data && response.data.success) {
+                const dbUser = response.data.user;
+
+                localStorage.setItem('token', idToken);
+                localStorage.setItem('user', JSON.stringify(dbUser));
+
+                setToken(idToken);
+                setUser(dbUser);
+                setIsAuthenticated(true);
+
+                // Redirect to the main application
+                window.location.hash = '#app';
+                resolve({ success: true });
+              } else {
+                resolve({ success: false, error: 'Failed to retrieve database user metadata' });
+              }
+            } catch (err) {
+              console.error('[Cognito Auth] Database sync error:', err);
+              resolve({ success: false, error: 'Database synchronization failed. Please try again.' });
+            }
+          },
+          onFailure: (err) => {
+            console.error('[Cognito Auth] Login failure:', err);
+            resolve({ success: false, error: err.message || 'Cognito authentication failed' });
+          }
+        });
+      });
+    } else {
+      // Local Backend Auth Fallback
+      try {
+        const response = await api.post('/api/auth/login', { email, password });
+        const { token: receivedToken, user: receivedUser } = response.data;
+
+        localStorage.setItem('token', receivedToken);
+        localStorage.setItem('user', JSON.stringify(receivedUser));
+
+        setToken(receivedToken);
+        setUser(receivedUser);
+        setIsAuthenticated(true);
+
+        window.location.hash = '#app';
+        return { success: true };
+      } catch (error) {
+        const errorMsg = error.response?.data?.error || 'Invalid credentials or connection issue';
+        return { success: false, error: errorMsg };
+      }
     }
   };
 
@@ -104,33 +171,80 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Handle user registration.
-   * Calls POST /api/auth/register
+   * Calls Cognito signUp OR fallback local register POST /api/auth/register
    */
   const register = async (username, email, password) => {
-    try {
-      const response = await api.post('/api/auth/register', { username, email, password });
-      const { token: receivedToken, user: receivedUser } = response.data;
+    if (userPool) {
+      return new Promise((resolve) => {
+        const attributeList = [
+          new CognitoUserAttribute({ Name: 'email', Value: email }),
+          new CognitoUserAttribute({ Name: 'preferred_username', Value: username })
+        ];
 
-      localStorage.setItem('token', receivedToken);
-      localStorage.setItem('user', JSON.stringify(receivedUser));
+        userPool.signUp(email, password, attributeList, null, (err, result) => {
+          if (err) {
+            console.error('[Cognito Auth] Registration error:', err);
+            resolve({ success: false, error: err.message || 'Cognito sign-up failed' });
+            return;
+          }
+          // Cognito registration requires confirmation code sent to email
+          resolve({ success: true, needsVerification: true, email });
+        });
+      });
+    } else {
+      // Local Backend Auth Fallback
+      try {
+        const response = await api.post('/api/auth/register', { username, email, password });
+        const { token: receivedToken, user: receivedUser } = response.data;
 
-      setToken(receivedToken);
-      setUser(receivedUser);
-      setIsAuthenticated(true);
+        localStorage.setItem('token', receivedToken);
+        localStorage.setItem('user', JSON.stringify(receivedUser));
 
-      // Redirect to the main application
-      window.location.hash = '#app';
-      return { success: true };
-    } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Registration failed';
-      return { success: false, error: errorMsg };
+        setToken(receivedToken);
+        setUser(receivedUser);
+        setIsAuthenticated(true);
+
+        window.location.hash = '#app';
+        return { success: true };
+      } catch (error) {
+        const errorMsg = error.response?.data?.error || 'Registration failed';
+        return { success: false, error: errorMsg };
+      }
     }
+  };
+
+  /**
+   * Verify Cognito account sign-up via confirmation code.
+   */
+  const confirmSignUp = async (email, code) => {
+    if (!userPool) {
+      return { success: false, error: 'AWS Cognito is not initialized locally' };
+    }
+    return new Promise((resolve) => {
+      const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+
+      cognitoUser.confirmRegistration(code, true, (err, result) => {
+        if (err) {
+          console.error('[Cognito Auth] Code confirmation failure:', err);
+          resolve({ success: false, error: err.message || 'Code confirmation failed' });
+        } else {
+          console.log('[Cognito Auth] Registration confirmed successfully');
+          resolve({ success: true });
+        }
+      });
+    });
   };
 
   /**
    * Log out user and wipe local credentials.
    */
   const logout = () => {
+    if (userPool) {
+      const cognitoUser = userPool.getCurrentUser();
+      if (cognitoUser) {
+        cognitoUser.signOut();
+      }
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setToken(null);
@@ -142,7 +256,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, loginWithGoogle, register, logout, updateCurrentUserState }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, loginWithGoogle, register, confirmSignUp, logout, updateCurrentUserState }}>
       {children}
     </AuthContext.Provider>
   );
