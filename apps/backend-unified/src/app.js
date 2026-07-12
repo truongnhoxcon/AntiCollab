@@ -42,6 +42,10 @@ io.on('connection', (socket) => {
 });
 
 // ── Express middleware ──────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  console.log(`[HTTP] ${req.method} ${req.url} - Length: ${req.headers['content-length'] || 0}`);
+  next();
+});
 app.use(express.json());
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
