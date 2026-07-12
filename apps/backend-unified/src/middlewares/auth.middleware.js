@@ -7,13 +7,16 @@ require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_change_me_in_production';
 
+const userPoolId = process.env.COGNITO_USER_POOL_ID?.trim();
+const clientId = process.env.COGNITO_CLIENT_ID?.trim();
+
 let cognitoVerifier = null;
-if (process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID) {
+if (userPoolId && clientId) {
   try {
     cognitoVerifier = CognitoJwtVerifier.create({
-      userPoolId: process.env.COGNITO_USER_POOL_ID,
+      userPoolId: userPoolId,
       tokenUse: "id",
-      clientId: process.env.COGNITO_CLIENT_ID,
+      clientId: clientId,
     }, {
       jwksCache: new SimpleJwksCache({
         fetcher: new SimpleJsonFetcher({
@@ -21,7 +24,7 @@ if (process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID) {
         }),
       }),
     });
-    console.log(`[Auth Middleware] AWS Cognito Verifier initialized with 10s fetch timeout for User Pool: ${process.env.COGNITO_USER_POOL_ID}`);
+    console.log(`[Auth Middleware] AWS Cognito Verifier initialized with 10s fetch timeout for User Pool: ${userPoolId}`);
   } catch (err) {
     console.error("[Auth Middleware] Failed to initialize Cognito verifier:", err);
   }
