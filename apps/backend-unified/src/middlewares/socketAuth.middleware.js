@@ -1,4 +1,6 @@
 const { CognitoJwtVerifier } = require("aws-jwt-verify");
+const { SimpleJwksCache } = require("aws-jwt-verify/jwk");
+const { SimpleJsonFetcher } = require("aws-jwt-verify/https");
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 require('dotenv').config();
@@ -12,8 +14,14 @@ if (process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID) {
       userPoolId: process.env.COGNITO_USER_POOL_ID,
       tokenUse: "id",
       clientId: process.env.COGNITO_CLIENT_ID,
+    }, {
+      jwksCache: new SimpleJwksCache({
+        fetcher: new SimpleJsonFetcher({
+          responseTimeout: 10000, // Increase fetch timeout to 10 seconds to bypass slow DNS/network latency
+        }),
+      }),
     });
-    console.log(`[Socket Auth] AWS Cognito Verifier initialized for User Pool: ${process.env.COGNITO_USER_POOL_ID}`);
+    console.log(`[Socket Auth] AWS Cognito Verifier initialized with 10s fetch timeout for User Pool: ${process.env.COGNITO_USER_POOL_ID}`);
   } catch (err) {
     console.error("[Socket Auth] Failed to initialize Cognito verifier:", err);
   }

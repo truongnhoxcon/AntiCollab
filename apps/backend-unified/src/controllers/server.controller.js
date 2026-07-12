@@ -278,7 +278,7 @@ async function updateServerMemberProfileMultipart(req, res) {
 
     // Check if file was uploaded
     if (req.file) {
-      avatarUrl = `/uploads/${req.file.filename}`;
+      avatarUrl = `/api/uploads/${req.file.filename}`;
     } else if (removeAvatar === 'true') {
       avatarUrl = '';
     }

@@ -67,6 +67,8 @@ services:
       - REDIS_URL=redis://redis:6379
       # Security Credentials
       - JWT_SECRET=default_jwt_secret_change_me_in_production
+      - COGNITO_USER_POOL_ID=us-east-1_T1G8NpNfD
+      - COGNITO_CLIENT_ID=u6d2969sehako3m265h3bomg9
       # Mock credentials for local standalone execution of S3 & Twilio APIs
       - AWS_REGION=us-east-1
       - S3_BUCKET_NAME=realtime-collab-files-default
@@ -87,6 +89,10 @@ services:
     build:
       context: ./apps/frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_COGNITO_USER_POOL_ID=us-east-1_T1G8NpNfD
+        - VITE_COGNITO_CLIENT_ID=u6d2969sehako3m265h3bomg9
+        - VITE_COGNITO_REGION=us-east-1
     container_name: realtime_frontend
     restart: always
     ports:

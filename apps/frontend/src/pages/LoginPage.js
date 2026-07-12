@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { KeyRound, Mail, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { GoogleLogin } from '@react-oauth/google';
 
 export default function LoginPage() {
-  const { login, register, confirmSignUp, loginWithGoogle } = useAuth();
+  const { login, register, confirmSignUp } = useAuth();
   
   // Toggle between login and register state
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -102,22 +101,6 @@ export default function LoginPage() {
       }
     } catch (err) {
       setErrorMsg('Failed to verify code. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleSuccess = async (credential) => {
-    setIsSubmitting(true);
-    setErrorMsg(null);
-    setInfoMsg(null);
-    try {
-      const result = await loginWithGoogle(credential);
-      if (!result.success) {
-        setErrorMsg(result.error);
-      }
-    } catch (err) {
-      setErrorMsg('An unexpected error occurred during Google sign-in.');
     } finally {
       setIsSubmitting(false);
     }
@@ -306,46 +289,19 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* OR Divider (Hidden in verify mode) */}
+        {/* Auth Mode Toggle Link (Hidden in verify mode) */}
         {!isVerifyMode && (
-          <>
-            <div className="flex items-center my-5">
-              <div className="flex-grow border-t border-gray-800/40"></div>
-              <span className="px-3 text-[10px] text-gray-500 font-bold uppercase tracking-wider">or</span>
-              <div className="flex-grow border-t border-gray-800/40"></div>
-            </div>
-
-            {/* Google Login Button */}
-            <div className="flex justify-center w-full mb-5">
-              <div className="w-full" style={{ minHeight: '40px' }}>
-                <GoogleLogin
-                  onSuccess={(credentialResponse) => {
-                    handleGoogleSuccess(credentialResponse.credential);
-                  }}
-                  onError={() => {
-                    setErrorMsg('Google Sign-In failed. Please try again.');
-                  }}
-                  theme="filled_blue"
-                  size="large"
-                  shape="rectangular"
-                  width="100%"
-                />
-              </div>
-            </div>
-
-            {/* Auth Mode Toggle Link */}
-            <div className="text-left mt-4 text-sm">
-              <span className="text-gray-400">
-                {isLoginMode ? 'Need an account? ' : 'Already have an account? '}
-              </span>
-              <button
-                onClick={handleToggleMode}
-                className="text-[#00A8FC] hover:underline font-medium focus:outline-none bg-transparent border-none outline-none cursor-pointer"
-              >
-                {isLoginMode ? 'Register' : 'Log In'}
-              </button>
-            </div>
-          </>
+          <div className="text-left mt-4 text-sm">
+            <span className="text-gray-400">
+              {isLoginMode ? 'Need an account? ' : 'Already have an account? '}
+            </span>
+            <button
+              onClick={handleToggleMode}
+              className="text-[#00A8FC] hover:underline font-medium focus:outline-none bg-transparent border-none outline-none cursor-pointer"
+            >
+              {isLoginMode ? 'Register' : 'Log In'}
+            </button>
+          </div>
         )}
 
         {/* Back Link */}
