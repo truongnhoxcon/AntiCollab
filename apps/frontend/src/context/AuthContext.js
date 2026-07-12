@@ -4,8 +4,8 @@ import { CognitoUserPool, CognitoUser, AuthenticationDetails, CognitoUserAttribu
 
 const AuthContext = createContext(null);
 
-const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID;
-const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
+const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID?.trim();
+const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID?.trim();
 
 let userPool = null;
 if (userPoolId && clientId) {
