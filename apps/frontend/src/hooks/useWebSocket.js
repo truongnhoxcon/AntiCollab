@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { WS_URL } from '../services/api.js';
 
@@ -9,14 +9,14 @@ import { WS_URL } from '../services/api.js';
  * @returns {Object|null} - The socket client instance
  */
 export const useWebSocket = (token) => {
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     if (!token) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      if (socket) {
+        socket.disconnect();
       }
+      setSocket(null);
       return;
     }
 
@@ -30,7 +30,7 @@ export const useWebSocket = (token) => {
     // CloudFront forwards the WebSocket Upgrade header through to the ALB,
     // so we can use websocket transport directly without polling fallback.
     // forceNew: true prevents socket reuse across re-renders.
-    const socket = io(socketHost, {
+    const newSocket = io(socketHost, {
       auth: { token },
       path: '/ws',
       transports: ['websocket'],
@@ -41,27 +41,25 @@ export const useWebSocket = (token) => {
       reconnectionDelayMax: 5000,
     });
 
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log(`[WebSocket Connected] Handshake authorized. ID: ${socket.id}`);
+    newSocket.on('connect', () => {
+      console.log(`[WebSocket Connected] Handshake authorized. ID: ${newSocket.id}`);
     });
 
-    socket.on('connect_error', (error) => {
+    newSocket.on('connect_error', (error) => {
       console.error('[WebSocket Handshake Error] Connection failed:', error.message);
     });
 
-    // Cleanup connection upon unmount
+    setSocket(newSocket);
+
+    // Cleanup connection upon unmount or token change
     return () => {
-      if (socket) {
-        console.log('[WebSocket Disconnect] Cleaning connection due to unmount...');
-        socket.disconnect();
-      }
-      socketRef.current = null;
+      console.log('[WebSocket Disconnect] Cleaning connection due to unmount or token change...');
+      newSocket.disconnect();
+      setSocket(null);
     };
   }, [token]);
 
-  return socketRef.current;
+  return socket;
 };
 
 export default useWebSocket;

@@ -175,6 +175,22 @@ function registerChatHandler(io, socket) {
 
       const dbMessage = insertResult.rows[0];
 
+      // Ensure DM conversation is active in user_dms for both sender and receiver
+      await db.query(
+        `INSERT INTO user_dms (user_id, dm_user_id, active) 
+         VALUES ($1, $2, TRUE) 
+         ON CONFLICT (user_id, dm_user_id) 
+         DO UPDATE SET active = TRUE`,
+        [senderId, receiverId]
+      );
+      await db.query(
+        `INSERT INTO user_dms (user_id, dm_user_id, active) 
+         VALUES ($1, $2, TRUE) 
+         ON CONFLICT (user_id, dm_user_id) 
+         DO UPDATE SET active = TRUE`,
+        [receiverId, senderId]
+      );
+
       // 2. Construct message object
       const messagePayload = {
         id: dbMessage.id,

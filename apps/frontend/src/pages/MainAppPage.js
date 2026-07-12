@@ -123,16 +123,26 @@ export default function MainAppPage() {
   const [collapseVoice, setCollapseVoice] = useState(false);
   const [connectedVoiceId, setConnectedVoiceId] = useState(null);
 
+  const [inputMode, setInputMode] = useState(() => {
+    return localStorage.getItem('voice_input_mode') || 'activity';
+  });
+  const [pttKey, setPttKey] = useState(() => {
+    return localStorage.getItem('voice_ptt_key') || 'CapsLock';
+  });
+  const [isRecordingPtt, setIsRecordingPtt] = useState(false);
+
   const {
     localStream,
     remoteStreams,
     peersInfo,
+    remoteCameraStates,
+    speakingUsers,
     isMuted: isWebRTCMuted,
     isCameraOff: isWebRTCCameraOff,
     toggleMic: toggleWebRTCMic,
     toggleCamera: toggleWebRTCCamera,
     leaveChannel: leaveWebRTCChannel
-  } = useWebRTC(socket, connectedVoiceId);
+  } = useWebRTC(socket, connectedVoiceId, { inputMode, pttKey, localUsername: user?.username });
   const [showMembersList, setShowMembersList] = useState(true);
 
   // User peripheral states
@@ -144,6 +154,8 @@ export default function MainAppPage() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const channelInputRef = useRef(null);
+  const dmInputRef = useRef(null);
 
   // Modals visibility and fields
   const [showServerModal, setShowServerModal] = useState(false);
@@ -212,14 +224,191 @@ export default function MainAppPage() {
   const [hardwareAccel, setHardwareAccel] = useState(true);
 
   const [isVoiceExpanded, setIsVoiceExpanded] = useState(settingsTab === 'voice');
-  const [micVolume, setMicVolume] = useState(80);
-  const [speakerVolume, setSpeakerVolume] = useState(80);
-  const [inputMode, setInputMode] = useState('activity');
+  const [micVolume, setMicVolume] = useState(() => {
+    const val = localStorage.getItem('voice_mic_volume');
+    return val ? Number(val) : 80;
+  });
+  const [speakerVolume, setSpeakerVolume] = useState(() => {
+    const val = localStorage.getItem('voice_speaker_volume');
+    return val ? Number(val) : 80;
+  });
   const [isTestingMic, setIsTestingMic] = useState(false);
   const [isTestingVideo, setIsTestingVideo] = useState(false);
-  const [selectedMic, setSelectedMic] = useState('Default - MacBook Pro Microphone');
-  const [selectedSpeaker, setSelectedSpeaker] = useState('Default - MacBook Pro Speakers');
-  const [selectedCamera, setSelectedCamera] = useState('FaceTime HD Camera');
+  const [selectedMic, setSelectedMic] = useState(() => {
+    return localStorage.getItem('voice_selected_mic') || '';
+  });
+  const [selectedSpeaker, setSelectedSpeaker] = useState(() => {
+    return localStorage.getItem('voice_selected_speaker') || '';
+  });
+  const [selectedCamera, setSelectedCamera] = useState(() => {
+    return localStorage.getItem('voice_selected_camera') || '';
+  });
+
+  const [devicesList, setDevicesList] = useState({ mics: [], speakers: [], cameras: [] });
+
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+          const list = await navigator.mediaDevices.enumerateDevices();
+          const mics = list.filter(d => d.kind === 'audioinput').map(d => ({ id: d.deviceId, label: d.label || `Microphone (${d.deviceId.substring(0, 5)})` }));
+          const speakers = list.filter(d => d.kind === 'audiooutput').map(d => ({ id: d.deviceId, label: d.label || `Speaker (${d.deviceId.substring(0, 5)})` }));
+          const cameras = list.filter(d => d.kind === 'videoinput').map(d => ({ id: d.deviceId, label: d.label || `Camera (${d.deviceId.substring(0, 5)})` }));
+          
+          setDevicesList({ mics, speakers, cameras });
+          
+          const savedMic = localStorage.getItem('voice_selected_mic');
+          if (!savedMic && mics.length > 0) {
+            setSelectedMic(mics[0].id);
+            localStorage.setItem('voice_selected_mic', mics[0].id);
+          }
+          const savedSpeaker = localStorage.getItem('voice_selected_speaker');
+          if (!savedSpeaker && speakers.length > 0) {
+            setSelectedSpeaker(speakers[0].id);
+            localStorage.setItem('voice_selected_speaker', speakers[0].id);
+          }
+          const savedCamera = localStorage.getItem('voice_selected_camera');
+          if (!savedCamera && cameras.length > 0) {
+            setSelectedCamera(cameras[0].id);
+            localStorage.setItem('voice_selected_camera', cameras[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to list media devices:', err);
+      }
+    };
+
+    getDevices();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', getDevices);
+      return () => navigator.mediaDevices.removeEventListener('devicechange', getDevices);
+    }
+  }, []);
+
+  const [micLevel, setMicLevel] = useState(0);
+  const micAudioContextRef = useRef(null);
+  const micAnalyserRef = useRef(null);
+  const micStreamRef = useRef(null);
+  const micAnimationRef = useRef(null);
+
+  useEffect(() => {
+    if (isTestingMic) {
+      const startMicTest = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: selectedMic ? { deviceId: { ideal: selectedMic } } : true
+          });
+          micStreamRef.current = stream;
+          
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          
+          const source = audioContext.createMediaStreamSource(stream);
+          source.connect(analyser);
+          
+          micAudioContextRef.current = audioContext;
+          micAnalyserRef.current = analyser;
+          
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+          
+          const updateVolume = () => {
+            if (!micAnalyserRef.current) return;
+            micAnalyserRef.current.getByteFrequencyData(dataArray);
+            
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              sum += dataArray[i];
+            }
+            const average = sum / bufferLength;
+            const level = Math.min(100, Math.round((average / 128) * 100));
+            setMicLevel(level);
+            
+            micAnimationRef.current = requestAnimationFrame(updateVolume);
+          };
+          
+          updateVolume();
+        } catch (err) {
+          console.error('Mic test failed:', err);
+          setIsTestingMic(false);
+        }
+      };
+      
+      startMicTest();
+    } else {
+      if (micAnimationRef.current) {
+        cancelAnimationFrame(micAnimationRef.current);
+        micAnimationRef.current = null;
+      }
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+        micStreamRef.current = null;
+      }
+      if (micAudioContextRef.current) {
+        micAudioContextRef.current.close();
+        micAudioContextRef.current = null;
+      }
+      micAnalyserRef.current = null;
+      setMicLevel(0);
+    }
+
+    return () => {
+      if (micAnimationRef.current) cancelAnimationFrame(micAnimationRef.current);
+      if (micStreamRef.current) micStreamRef.current.getTracks().forEach(track => track.stop());
+      if (micAudioContextRef.current) micAudioContextRef.current.close();
+    };
+  }, [isTestingMic, selectedMic]);
+
+  const [videoTestStream, setVideoTestStream] = useState(null);
+
+  useEffect(() => {
+    if (isTestingVideo) {
+      const startVideoTest = async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: selectedCamera ? { deviceId: { ideal: selectedCamera } } : true
+          });
+          setVideoTestStream(stream);
+        } catch (err) {
+          console.error('Video test failed:', err);
+          setIsTestingVideo(false);
+        }
+      };
+      
+      startVideoTest();
+    } else {
+      if (videoTestStream) {
+        videoTestStream.getTracks().forEach(track => track.stop());
+        setVideoTestStream(null);
+      }
+    }
+
+    return () => {
+      if (videoTestStream) {
+        videoTestStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isTestingVideo, selectedCamera]);
+
+  useEffect(() => {
+    if (!isRecordingPtt) return;
+
+    const handleKeyPress = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const keyName = e.key;
+      console.log('[PTT Record] Captured key:', keyName);
+      
+      setPttKey(keyName);
+      localStorage.setItem('voice_ptt_key', keyName);
+      setIsRecordingPtt(false);
+    };
+
+    window.addEventListener('keydown', handleKeyPress, true);
+    return () => window.removeEventListener('keydown', handleKeyPress, true);
+  }, [isRecordingPtt]);
 
   const [isNotificationsExpanded, setIsNotificationsExpanded] = useState(settingsTab === 'notifications');
   const [desktopNotifs, setDesktopNotifs] = useState(true);
@@ -244,6 +433,24 @@ export default function MainAppPage() {
   const [tempStatusEmoji, setTempStatusEmoji] = useState('😊');
   const [tempClearAfter, setTempClearAfter] = useState('dont_clear');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // Auto-grow channel chat input textarea
+  useEffect(() => {
+    const textarea = channelInputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  }, [inputText]);
+
+  // Auto-grow DM chat input textarea
+  useEffect(() => {
+    const textarea = dmInputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  }, [dmInputText]);
 
   useEffect(() => {
     if (isStatusModalOpen) {
@@ -320,6 +527,30 @@ export default function MainAppPage() {
           return [...prev, msg];
         });
       }
+
+      // Also update the DMs list in the sidebar!
+      const otherUser = msg.senderId === user?.id 
+        ? { id: msg.receiverId, username: activeDMRef.current?.user?.username || 'User' }
+        : { id: msg.senderId, username: msg.sender?.username || 'User' };
+
+      setDms((prevDms) => {
+        const existingIndex = prevDms.findIndex(d => d.dmUserId === otherUser.id);
+        if (existingIndex !== -1) {
+          const updated = [...prevDms];
+          const [dm] = updated.splice(existingIndex, 1);
+          return [dm, ...updated];
+        } else {
+          const newDm = {
+            id: msg.id || `dm-${Date.now()}`,
+            dmUserId: otherUser.id,
+            user: {
+              id: otherUser.id,
+              username: otherUser.username
+            }
+          };
+          return [newDm, ...prevDms];
+        }
+      });
     };
 
     socket.on('dm_message', handleNewDMMessage);
@@ -475,6 +706,18 @@ export default function MainAppPage() {
   const userAvatarSrc = user?.avatarUrl 
     ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `${API_BASE_URL}${user.avatarUrl}`) 
     : `https://api.dicebear.com/7.x/pixel-art/svg?seed=${user?.username || 'You'}`;
+
+  const getMemberAvatar = (username) => {
+    if (!username) return `https://api.dicebear.com/7.x/pixel-art/svg?seed=Unknown`;
+    if (username === user?.username) {
+      return userAvatarSrc;
+    }
+    const member = (serverMembers || []).find(m => m.username === username) || (members || []).find(m => m.username === username);
+    if (member && member.avatarUrl) {
+      return member.avatarUrl.startsWith('http') ? member.avatarUrl : `${API_BASE_URL}${member.avatarUrl}`;
+    }
+    return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${username}`;
+  };
 
 
 
@@ -889,7 +1132,7 @@ export default function MainAppPage() {
           {/* Messages Column */}
           <div className="flex-1 bg-[#313338] flex flex-col min-w-0 h-full">
             {/* Scrollable Message List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div className="mb-6 border-b border-gray-700/30 pb-6">
                 <div className="relative w-20 h-20 mb-4">
                   <img
@@ -926,7 +1169,7 @@ export default function MainAppPage() {
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words">
+                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words whitespace-pre-wrap">
                       {msg.content}
                     </p>
                   </div>
@@ -944,12 +1187,19 @@ export default function MainAppPage() {
                 >
                   <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
                 </button>
-                <input
-                  type="text"
+                <textarea
+                  ref={dmInputRef}
+                  rows={1}
                   value={dmInputText}
                   onChange={(e) => setDmInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendDMMessage(e);
+                    }
+                  }}
                   placeholder={`Message @${activeDM.user?.username}`}
-                  className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1"
+                  className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1 resize-none py-1.5 max-h-[200px] overflow-y-auto custom-scrollbar"
                 />
                 <div className="flex items-center gap-2 text-gray-400">
                   <button type="button" className="p-1 hover:text-gray-200 transition">
@@ -1145,14 +1395,12 @@ export default function MainAppPage() {
 
   const handleVoiceChannelClick = (channelId) => {
     if (connectedVoiceId === channelId) {
-      leaveWebRTCChannel();
-      setConnectedVoiceId(null);
+      setActiveChannelId(channelId);
     } else {
       if (connectedVoiceId) {
         leaveWebRTCChannel();
       }
       setConnectedVoiceId(channelId);
-      // Auto select the voice channel when clicking it
       setActiveChannelId(channelId);
     }
   };
@@ -1455,7 +1703,7 @@ export default function MainAppPage() {
             )}
 
             {/* Channel Categories */}
-            <div className="flex-1 overflow-y-auto pt-4 px-2 space-y-4">
+            <div className="flex-1 overflow-y-auto pt-4 px-2 space-y-4 custom-scrollbar">
 
               {/* TEXT CHANNELS */}
               <div>
@@ -1564,9 +1812,11 @@ export default function MainAppPage() {
                                     className="flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white py-0.5"
                                   >
                                     <img
-                                      src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${voiceUser.username}`}
+                                      src={getMemberAvatar(voiceUser.username)}
                                       alt="Avatar"
-                                      className="w-5 h-5 rounded-full bg-slate-800 flex-shrink-0"
+                                      className={`w-5 h-5 rounded-full bg-slate-800 flex-shrink-0 object-cover transition-all duration-150 ${
+                                        speakingUsers[voiceUser.username] ? 'ring-2 ring-pink-500 ring-offset-1 ring-offset-[#2B2D31]' : ''
+                                      }`}
                                     />
                                     <span className="truncate select-none">{voiceUser.username}</span>
                                   </div>
@@ -1712,7 +1962,9 @@ export default function MainAppPage() {
               <img
                 src={userAvatarSrc}
                 alt="Avatar"
-                className="w-8 h-8 rounded-full bg-slate-800"
+                className={`w-8 h-8 rounded-full bg-slate-800 transition-all duration-150 ${
+                  speakingUsers[user?.username] ? 'ring-2 ring-pink-500 ring-offset-1 ring-offset-[#232428]' : ''
+                }`}
               />
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#232428]" />
             </div>
@@ -1765,135 +2017,204 @@ export default function MainAppPage() {
       {/* 3. CENTER PANEL (CHAT OR FRIENDS) */}
       {activeServerId ? (
         activeChannel && activeChannel.type === 'voice' ? (
-          <main className="flex-1 bg-[#1E1F22] flex flex-col min-w-0 select-none">
-            {/* Header Bar */}
-            <header className="h-12 border-b border-[#1E1F22] bg-[#313338] flex items-center justify-between px-4 flex-shrink-0 shadow-sm text-white">
-              <div className="flex items-center gap-2 font-bold">
-                <Volume2 className="w-5 h-5 text-gray-400" />
-                <span>{activeChannel.name}</span>
-                <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-400 font-normal uppercase tracking-wider animate-pulse">
-                  Voice Connected
-                </span>
+          connectedVoiceId === activeChannel.id ? (
+            <main className="flex-1 bg-[#1E1F22] flex flex-col min-w-0 select-none">
+              {/* Header Bar */}
+              <header className="h-12 border-b border-[#1E1F22] bg-[#313338] flex items-center justify-between px-4 flex-shrink-0 shadow-sm text-white">
+                <div className="flex items-center gap-2 font-bold">
+                  <Volume2 className="w-5 h-5 text-gray-400" />
+                  <span>{activeChannel.name}</span>
+                  <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-400 font-normal uppercase tracking-wider animate-pulse">
+                    Voice Connected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      leaveWebRTCChannel();
+                      setConnectedVoiceId(null);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-bold transition duration-150 active:scale-95 cursor-pointer shadow-md"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Disconnect</span>
+                  </button>
+                </div>
+              </header>
+
+              {/* Video Grid Content */}
+              <div className="flex-1 p-6 overflow-y-auto flex items-center justify-center">
+                <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  {/* Local User Card */}
+                  <div className={`relative bg-[#2B2D31] rounded-xl overflow-hidden aspect-video border flex items-center justify-center shadow-lg group transition-all duration-150 ${
+                    speakingUsers[user?.username] ? 'border-pink-500 ring-2 ring-pink-500/50 shadow-pink-500/10' : 'border-gray-800/40'
+                  }`}>
+                    {isWebRTCCameraOff || !localStream ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#2B2D31]">
+                        <img
+                          src={getMemberAvatar(user?.username)}
+                          alt="Local Avatar"
+                          className={`w-24 h-24 rounded-full border-4 border-[#1E1F22] object-cover shadow-2xl select-none transition-all duration-150 ${
+                            speakingUsers[user?.username] ? 'ring-4 ring-pink-500 ring-offset-2 ring-offset-[#2B2D31]' : ''
+                          }`}
+                        />
+                      </div>
+                    ) : (
+                      <video
+                        ref={(el) => {
+                          if (el && localStream && el.srcObject !== localStream) {
+                            el.srcObject = localStream;
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover transform -scale-x-100"
+                      />
+                    )}
+                    <div className="absolute bottom-3 left-3 bg-[#111214]/75 px-3 py-1 rounded-md text-xs font-bold text-gray-200 flex items-center gap-1.5 backdrop-blur-sm select-none">
+                      {isWebRTCMuted && <MicOff className="w-3.5 h-3.5 text-red-500" />}
+                      <span>{user?.username}</span>
+                    </div>
+                  </div>
+
+                  {/* Remote Users Cards */}
+                  {Object.keys(remoteStreams).map((peerSocketId) => {
+                    const rStream = remoteStreams[peerSocketId];
+                    const peerName = peersInfo[peerSocketId] || 'Remote User';
+                    const isPeerCameraOff = remoteCameraStates[peerSocketId];
+                    const hasVideo = rStream && rStream.getVideoTracks().length > 0 && rStream.getVideoTracks()[0].enabled && !isPeerCameraOff;
+
+                    return (
+                      <div key={peerSocketId} className={`relative bg-[#2B2D31] rounded-xl overflow-hidden aspect-video border flex items-center justify-center shadow-lg group transition-all duration-150 ${
+                        speakingUsers[peerName] ? 'border-pink-500 ring-2 ring-pink-500/50 shadow-pink-500/10' : 'border-gray-800/40'
+                      }`}>
+                        {!rStream || !hasVideo ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#2B2D31]">
+                            <img
+                              src={getMemberAvatar(peerName)}
+                              alt="Remote Avatar"
+                              className={`w-24 h-24 rounded-full border-4 border-[#1E1F22] object-cover shadow-2xl select-none transition-all duration-150 ${
+                                speakingUsers[peerName] ? 'ring-4 ring-pink-500 ring-offset-2 ring-offset-[#2B2D31]' : ''
+                              }`}
+                            />
+                          </div>
+                        ) : (
+                          <video
+                            ref={(el) => {
+                              if (el && rStream && el.srcObject !== rStream) {
+                                el.srcObject = rStream;
+                              }
+                            }}
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        <div className="absolute bottom-3 left-3 bg-[#111214]/75 px-3 py-1 rounded-md text-xs font-bold text-gray-200 flex items-center gap-1.5 backdrop-blur-sm select-none">
+                          <span>{peerName}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Controls Menu */}
+              <div className="h-20 bg-[#111214] border-t border-gray-950 flex items-center justify-center gap-4 flex-shrink-0 shadow-md">
+                <button
+                  type="button"
+                  onClick={toggleWebRTCMic}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
+                    ${isWebRTCMuted
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
+                  title={isWebRTCMuted ? 'Unmute Mic' : 'Mute Mic'}
+                >
+                  {isWebRTCMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleWebRTCCamera}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
+                    ${isWebRTCCameraOff
+                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
+                  title={isWebRTCCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
+                >
+                  {isWebRTCCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {
                     leaveWebRTCChannel();
                     setConnectedVoiceId(null);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-bold transition duration-150 active:scale-95 cursor-pointer shadow-md"
+                  className="w-12 h-12 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer"
+                  title="Disconnect"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Disconnect</span>
+                  <LogOut className="w-5 h-5" />
                 </button>
               </div>
-            </header>
+            </main>
+          ) : (
+            <main className="flex-1 bg-[#313338] flex flex-col min-w-0 select-none">
+              {/* Header Bar */}
+              <header className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 flex-shrink-0 shadow-sm text-white">
+                <div className="flex items-center gap-2 font-bold">
+                  <Volume2 className="w-5 h-5 text-gray-400" />
+                  <span>{activeChannel.name}</span>
+                </div>
+              </header>
 
-            {/* Video Grid Content */}
-            <div className="flex-1 p-6 overflow-y-auto flex items-center justify-center">
-              <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
-                {/* Local User Card */}
-                <div className="relative bg-[#111214] rounded-lg overflow-hidden aspect-video border border-gray-800/80 flex items-center justify-center shadow-lg group">
-                  {isWebRTCCameraOff || !localStream ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#2B2D31] text-gray-400 gap-2">
-                      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-bold border border-gray-700 shadow-inner">
-                        {user?.username?.substring(0, 2).toUpperCase()}
+              {/* Preview/Join UI */}
+              <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-b from-[#313338] to-[#2B2D31] text-white p-6">
+                <h1 className="text-4xl font-extrabold mb-2 tracking-tight">{activeChannel.name}</h1>
+                
+                <div className="mb-8 text-gray-400 text-sm text-center">
+                  {voiceStates[activeChannel.id] && voiceStates[activeChannel.id].length > 0 ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-xs uppercase font-bold tracking-wider text-gray-500 mb-1">Users in Channel:</span>
+                      <div className="flex -space-x-2 overflow-hidden mb-2">
+                        {voiceStates[activeChannel.id].map(u => (
+                          <img
+                            key={u.userId}
+                            className="inline-block h-8 w-8 rounded-full ring-2 ring-[#313338] bg-slate-800"
+                            src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${u.username}`}
+                            alt={u.username}
+                            title={u.username}
+                          />
+                        ))}
                       </div>
-                      <span className="text-xs font-semibold text-gray-500">Camera Off</span>
+                      <span className="text-gray-300 font-medium">
+                        {voiceStates[activeChannel.id].map(u => u.username).join(', ')}
+                      </span>
                     </div>
                   ) : (
-                    <video
-                      ref={(el) => {
-                        if (el && localStream) el.srcObject = localStream;
-                      }}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover transform -scale-x-100"
-                    />
+                    <span>No one is currently in voice</span>
                   )}
-                  <div className="absolute bottom-2.5 left-2.5 bg-black/60 px-2.5 py-1 rounded text-xs font-bold text-white flex items-center gap-1.5 select-none backdrop-blur-sm">
-                    {isWebRTCMuted && <MicOff className="w-3.5 h-3.5 text-red-500" />}
-                    <span>{user?.username} (You)</span>
-                  </div>
                 </div>
 
-                {/* Remote Users Cards */}
-                {Object.keys(remoteStreams).map((peerSocketId) => {
-                  const rStream = remoteStreams[peerSocketId];
-                  const peerName = peersInfo[peerSocketId] || 'Remote User';
-                  const hasVideo = rStream && rStream.getVideoTracks().length > 0 && rStream.getVideoTracks()[0].enabled;
-
-                  return (
-                    <div key={peerSocketId} className="relative bg-[#111214] rounded-lg overflow-hidden aspect-video border border-gray-800/80 flex items-center justify-center shadow-lg group">
-                      {!rStream || !hasVideo ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#2B2D31] text-gray-400 gap-2">
-                          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-bold border border-gray-700 shadow-inner">
-                            {peerName.substring(0, 2).toUpperCase()}
-                          </div>
-                          <span className="text-xs font-semibold text-gray-500">Camera Off</span>
-                        </div>
-                      ) : (
-                        <video
-                          ref={(el) => {
-                            if (el && rStream) el.srcObject = rStream;
-                          }}
-                          autoPlay
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                      <div className="absolute bottom-2.5 left-2.5 bg-black/60 px-2.5 py-1 rounded text-xs font-bold text-white flex items-center gap-1.5 select-none backdrop-blur-sm">
-                        <span>{peerName}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (connectedVoiceId) {
+                      leaveWebRTCChannel();
+                    }
+                    setConnectedVoiceId(activeChannel.id);
+                  }}
+                  className="px-8 py-3 bg-white text-[#313338] hover:bg-gray-100 font-bold rounded-lg transition duration-150 active:scale-95 shadow-md cursor-pointer text-sm"
+                >
+                  Join Voice
+                </button>
               </div>
-            </div>
-
-            {/* Controls Menu */}
-            <div className="h-20 bg-[#111214] border-t border-gray-950 flex items-center justify-center gap-4 flex-shrink-0 shadow-md">
-              <button
-                type="button"
-                onClick={toggleWebRTCMic}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
-                  ${isWebRTCMuted
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
-                title={isWebRTCMuted ? 'Unmute Mic' : 'Mute Mic'}
-              >
-                {isWebRTCMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={toggleWebRTCCamera}
-                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
-                  ${isWebRTCCameraOff
-                    ? 'bg-red-500 text-white hover:bg-red-600'
-                    : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
-                title={isWebRTCCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
-              >
-                {isWebRTCCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  leaveWebRTCChannel();
-                  setConnectedVoiceId(null);
-                }}
-                className="w-12 h-12 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer"
-                title="Disconnect"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </main>
+            </main>
+          )
         ) : (
           <main className="flex-1 bg-[#313338] flex flex-col min-w-0">
             {/* Header Bar */}
@@ -1939,7 +2260,7 @@ export default function MainAppPage() {
             </header>
 
             {/* Scrollable Message List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               <div className="mb-6 border-b border-gray-700/30 pb-6">
                 <div className="w-16 h-16 rounded-full bg-[#3F4147] flex items-center justify-center text-white mb-4">
                   <Hash className="w-10 h-10" />
@@ -1969,7 +2290,7 @@ export default function MainAppPage() {
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words">
+                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words whitespace-pre-wrap">
                       {msg.content}
                     </p>
                   </div>
@@ -1988,12 +2309,19 @@ export default function MainAppPage() {
                   >
                     <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
                   </button>
-                  <input
-                    type="text"
+                  <textarea
+                    ref={channelInputRef}
+                    rows={1}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
                     placeholder={`Message #` + activeChannel.name}
-                    className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1"
+                    className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1 resize-none py-1.5 max-h-[200px] overflow-y-auto custom-scrollbar"
                   />
                   <div className="flex items-center gap-2 text-gray-400">
                     <button type="button" className="p-1 hover:text-gray-200 transition">
@@ -2318,7 +2646,7 @@ export default function MainAppPage() {
           const offlineMembers = serverMembers.filter((m) => !globalOnlineUserIds.has(m.id));
 
           return (
-            <aside className="relative w-60 bg-[#2B2D31] border-l border-[#1E1F22] flex flex-col flex-shrink-0 py-4 overflow-y-auto select-none">
+            <aside className="relative w-60 bg-[#2B2D31] border-l border-[#1E1F22] flex flex-col flex-shrink-0 py-4 overflow-y-auto custom-scrollbar select-none">
               {/* Online category */}
               {onlineMembers.length > 0 && (
                 <div className="mb-4">
@@ -4089,23 +4417,38 @@ export default function MainAppPage() {
                               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Microphone</label>
                               <select
                                 value={selectedMic}
-                                onChange={(e) => setSelectedMic(e.target.value)}
-                                className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                                onChange={(e) => {
+                                  setSelectedMic(e.target.value);
+                                  localStorage.setItem('voice_selected_mic', e.target.value);
+                                }}
+                                className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition text-sm cursor-pointer"
                               >
-                                <option value="Default - MacBook Pro Microphone">Default - MacBook Pro Microphone</option>
-                                <option value="External USB Microphone">External USB Microphone</option>
+                                {devicesList.mics.length > 0 ? (
+                                  devicesList.mics.map(d => (
+                                    <option key={d.id} value={d.id}>{d.label}</option>
+                                  ))
+                                ) : (
+                                  <option value="">No microphones found</option>
+                                )}
                               </select>
                             </div>
                             <div>
                               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Speaker</label>
                               <select
                                 value={selectedSpeaker}
-                                onChange={(e) => setSelectedSpeaker(e.target.value)}
-                                className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                                onChange={(e) => {
+                                  setSelectedSpeaker(e.target.value);
+                                  localStorage.setItem('voice_selected_speaker', e.target.value);
+                                }}
+                                className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition text-sm cursor-pointer"
                               >
-                                <option value="Default - MacBook Pro Speakers">Default - MacBook Pro Speakers</option>
-                                <option value="External USB Speakers">External USB Speakers</option>
-                                <option value="Headphones">Headphones</option>
+                                {devicesList.speakers.length > 0 ? (
+                                  devicesList.speakers.map(d => (
+                                    <option key={d.id} value={d.id}>{d.label}</option>
+                                  ))
+                                ) : (
+                                  <option value="">No speakers found</option>
+                                )}
                               </select>
                             </div>
                           </div>
@@ -4119,7 +4462,11 @@ export default function MainAppPage() {
                                 min="0"
                                 max="100"
                                 value={micVolume}
-                                onChange={(e) => setMicVolume(Number(e.target.value))}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setMicVolume(val);
+                                  localStorage.setItem('voice_mic_volume', val);
+                                }}
                                 className="w-full accent-[#5865F2] mt-2 cursor-pointer"
                               />
                               <div className="text-[10px] text-gray-400 text-right mt-1">{micVolume}%</div>
@@ -4131,7 +4478,11 @@ export default function MainAppPage() {
                                 min="0"
                                 max="100"
                                 value={speakerVolume}
-                                onChange={(e) => setSpeakerVolume(Number(e.target.value))}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setSpeakerVolume(val);
+                                  localStorage.setItem('voice_speaker_volume', val);
+                                }}
                                 className="w-full accent-[#5865F2] mt-2 cursor-pointer"
                               />
                               <div className="text-[10px] text-gray-400 text-right mt-1">{speakerVolume}%</div>
@@ -4150,8 +4501,8 @@ export default function MainAppPage() {
                             </button>
                             <div className="flex-1 h-3 bg-[#1E1F22] rounded-full overflow-hidden relative">
                               <div
-                                className={`h-full bg-[#248046] transition-all duration-300 ${isTestingMic ? 'w-2/3 animate-pulse' : 'w-1/3'
-                                  }`}
+                                style={{ width: `${isTestingMic ? micLevel : 0}%` }}
+                                className="h-full bg-[#248046] transition-all duration-75"
                               />
                             </div>
                           </div>
@@ -4162,7 +4513,10 @@ export default function MainAppPage() {
                             <div className="flex gap-4">
                               {/* Voice Activity Radio */}
                               <div
-                                onClick={() => setInputMode('activity')}
+                                onClick={() => {
+                                  setInputMode('activity');
+                                  localStorage.setItem('voice_input_mode', 'activity');
+                                }}
                                 className={`flex-1 flex items-center justify-between p-4 rounded-lg bg-[#1E1F22] border cursor-pointer transition ${inputMode === 'activity' ? 'border-[#5865F2]' : 'border-transparent hover:bg-[#2B2D31]/40'
                                   }`}
                               >
@@ -4175,7 +4529,10 @@ export default function MainAppPage() {
 
                               {/* Push to Talk Radio */}
                               <div
-                                onClick={() => setInputMode('push')}
+                                onClick={() => {
+                                  setInputMode('push');
+                                  localStorage.setItem('voice_input_mode', 'push');
+                                }}
                                 className={`flex-1 flex items-center justify-between p-4 rounded-lg bg-[#1E1F22] border cursor-pointer transition ${inputMode === 'push' ? 'border-[#5865F2]' : 'border-transparent hover:bg-[#2B2D31]/40'
                                   }`}
                               >
@@ -4188,6 +4545,32 @@ export default function MainAppPage() {
                             </div>
                           </div>
 
+                          {/* Push to talk Shortcut Config */}
+                          {inputMode === 'push' && (
+                            <div className="mt-6 border-t border-[#1E1F22] pt-6 animate-fade-in">
+                              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Shortcut Key</label>
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 bg-[#1E1F22] border border-transparent rounded px-4 py-3 text-sm font-semibold text-gray-200 uppercase select-none">
+                                  {isRecordingPtt ? 'Press any key...' : pttKey.replace(' ', 'Space')}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsRecordingPtt(!isRecordingPtt)}
+                                  className={`px-5 py-3 rounded text-sm font-bold text-white transition cursor-pointer select-none
+                                    ${isRecordingPtt
+                                      ? 'bg-red-500 hover:bg-red-600'
+                                      : 'bg-[#5865F2] hover:bg-[#4752C4]'
+                                    }`}
+                                >
+                                  {isRecordingPtt ? 'Cancel' : 'Edit Keybind'}
+                                </button>
+                              </div>
+                              <span className="text-[10px] text-gray-500 mt-2 block leading-normal">
+                                When using Push to Talk, you must hold this shortcut key down to unmute your microphone and speak.
+                              </span>
+                            </div>
+                          )}
+
                         </div>
                       </div>
 
@@ -4199,15 +4582,22 @@ export default function MainAppPage() {
                           {/* Video Preview Box */}
                           <div className="w-full h-64 bg-black rounded-lg flex items-center justify-center mb-4 border border-[#1E1F22] relative overflow-hidden">
                             {isTestingVideo ? (
-                              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-950 via-slate-900 to-emerald-950 flex flex-col items-center justify-center animate-fade-in">
-                                <div className="w-16 h-16 rounded-full bg-[#5865F2]/20 flex items-center justify-center text-[#5865F2] mb-3 animate-pulse">
-                                  <Camera size={32} />
-                                </div>
-                                <span className="text-sm font-semibold text-gray-200">Camera preview active...</span>
+                              <div className="absolute inset-0">
+                                <video
+                                  ref={(el) => {
+                                    if (el && videoTestStream && el.srcObject !== videoTestStream) {
+                                      el.srcObject = videoTestStream;
+                                    }
+                                  }}
+                                  autoPlay
+                                  playsInline
+                                  muted
+                                  className="w-full h-full object-cover transform -scale-x-100 animate-fade-in"
+                                />
                                 <button
                                   type="button"
                                   onClick={() => setIsTestingVideo(false)}
-                                  className="mt-4 bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-4 py-2 rounded transition"
+                                  className="absolute bottom-4 right-4 bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-4 py-2 rounded transition shadow-lg z-10"
                                 >
                                   Stop Test
                                 </button>
@@ -4231,11 +4621,19 @@ export default function MainAppPage() {
                             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Camera</label>
                             <select
                               value={selectedCamera}
-                              onChange={(e) => setSelectedCamera(e.target.value)}
-                              className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition"
+                              onChange={(e) => {
+                                setSelectedCamera(e.target.value);
+                                localStorage.setItem('voice_selected_camera', e.target.value);
+                              }}
+                              className="bg-[#1E1F22] text-gray-200 w-full p-2.5 rounded mt-1 outline-none border border-transparent focus:border-[#5865F2] transition text-sm cursor-pointer"
                             >
-                              <option value="FaceTime HD Camera">FaceTime HD Camera</option>
-                              <option value="External USB Camera">External USB Camera</option>
+                              {devicesList.cameras.length > 0 ? (
+                                devicesList.cameras.map(d => (
+                                  <option key={d.id} value={d.id}>{d.label}</option>
+                                ))
+                              ) : (
+                                <option value="">No cameras found</option>
+                              )}
                             </select>
                           </div>
 
@@ -4261,9 +4659,17 @@ export default function MainAppPage() {
                                 setInputMode('activity');
                                 setIsTestingMic(false);
                                 setIsTestingVideo(false);
-                                setSelectedMic('Default - MacBook Pro Microphone');
-                                setSelectedSpeaker('Default - MacBook Pro Speakers');
-                                setSelectedCamera('FaceTime HD Camera');
+                                setPttKey('CapsLock');
+                                localStorage.removeItem('voice_mic_volume');
+                                localStorage.removeItem('voice_speaker_volume');
+                                localStorage.removeItem('voice_input_mode');
+                                localStorage.removeItem('voice_selected_mic');
+                                localStorage.removeItem('voice_selected_speaker');
+                                localStorage.removeItem('voice_selected_camera');
+                                localStorage.removeItem('voice_ptt_key');
+                                if (devicesList.mics.length > 0) setSelectedMic(devicesList.mics[0].id);
+                                if (devicesList.speakers.length > 0) setSelectedSpeaker(devicesList.speakers[0].id);
+                                if (devicesList.cameras.length > 0) setSelectedCamera(devicesList.cameras[0].id);
                                 alert('Voice settings have been reset!');
                               }}
                               className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded text-xs transition"
